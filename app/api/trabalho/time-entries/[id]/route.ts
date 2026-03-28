@@ -14,14 +14,18 @@ export async function PUT(req: Request, { params }: RouteContext) {
     const { id } = await params
 
     let durationMin = data.durationMin ?? null
-    if (data.endAt && !durationMin) {
-      const entry = await prisma.timeEntry.findUnique({ where: { id } })
-      if (entry) {
-        durationMin = Math.round((new Date(data.endAt).getTime() - entry.startAt.getTime()) / 60000)
-      }
+    const entry = await prisma.timeEntry.findFirst({
+      where: { id, userId: session.user.id },
+    })
+    if (!entry) {
+      return NextResponse.json({ error: 'Entrada nao encontrada' }, { status: 404 })
     }
 
-    const entry = await prisma.timeEntry.update({
+    if (data.endAt && !durationMin) {
+      durationMin = Math.round((new Date(data.endAt).getTime() - entry.startAt.getTime()) / 60000)
+    }
+
+    const updatedEntry = await prisma.timeEntry.update({
       where: { id, userId: session.user.id },
       data: {
         endAt: data.endAt ? new Date(data.endAt) : undefined,
@@ -30,7 +34,7 @@ export async function PUT(req: Request, { params }: RouteContext) {
         durationMin,
       },
     })
-    return NextResponse.json(entry)
+    return NextResponse.json(updatedEntry)
   } catch {
     return NextResponse.json({ error: 'Erro ao atualizar entrada' }, { status: 500 })
   }

@@ -12,6 +12,13 @@ export async function POST(req: Request, { params }: RouteContext) {
   try {
     const data = await req.json()
     const { id: subjectId } = await params
+    const subject = await prisma.subject.findFirst({
+      where: { id: subjectId, userId: session.user.id },
+      select: { id: true },
+    })
+    if (!subject) {
+      return NextResponse.json({ error: 'Disciplina nao encontrada' }, { status: 404 })
+    }
 
     const grade = await prisma.subjectGrade.create({
       data: {
@@ -30,7 +37,10 @@ export async function POST(req: Request, { params }: RouteContext) {
     const weightedSum = allGrades.reduce((s, g) => s + g.grade * g.weight, 0)
     const currentGrade = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 10) / 10 : null
 
-    await prisma.subject.update({ where: { id: subjectId }, data: { currentGrade } })
+    await prisma.subject.update({
+      where: { id: subjectId, userId: session.user.id },
+      data: { currentGrade },
+    })
 
     return NextResponse.json(grade, { status: 201 })
   } catch {

@@ -14,11 +14,15 @@ export async function PUT(req: Request, { params }: RouteContext) {
     const { id } = await params
 
     let durationMin = data.durationMin ?? null
+    const existing = await prisma.studySession.findFirst({
+      where: { id, userId: session.user.id },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Sessao nao encontrada' }, { status: 404 })
+    }
+
     if (data.endAt && !durationMin) {
-      const existing = await prisma.studySession.findUnique({ where: { id } })
-      if (existing) {
-        durationMin = Math.round((new Date(data.endAt).getTime() - existing.startAt.getTime()) / 60000)
-      }
+      durationMin = Math.round((new Date(data.endAt).getTime() - existing.startAt.getTime()) / 60000)
     }
 
     const studySession = await prisma.studySession.update({

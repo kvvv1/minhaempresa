@@ -737,9 +737,77 @@ function normalizeLookupValue(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+async function assertEntityOwnership(userId: string, entity: string, id: string) {
+  if (!hasValue(id)) throw new Error(`ID invalido para ${entity}.`)
+
+  let record: { id: string } | null = null
+
+  switch (entity) {
+    case 'transaction':
+      record = await prisma.transaction.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'budget':
+      record = await prisma.budget.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'goal':
+      record = await prisma.goal.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'keyResult':
+      record = await prisma.keyResult.findFirst({ where: { id, goal: { userId } }, select: { id: true } })
+      break
+    case 'habit':
+      record = await prisma.habit.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'task':
+      record = await prisma.task.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'gtdTask':
+      record = await prisma.gtdTask.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'project':
+      record = await prisma.project.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'projectTask':
+      record = await prisma.projectTask.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'subject':
+      record = await prisma.subject.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'assignment':
+      record = await prisma.assignment.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'contact':
+      record = await prisma.contact.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'commitment':
+      record = await prisma.commitment.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'book':
+      record = await prisma.book.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'course':
+      record = await prisma.course.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'skill':
+      record = await prisma.skill.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    case 'diaryEntry':
+      record = await prisma.diaryEntry.findFirst({ where: { id, userId }, select: { id: true } })
+      break
+    default:
+      throw new Error(`Entidade nao suportada: ${entity}`)
+  }
+
+  if (!record) throw new Error(`${entity} nao encontrado para este usuario.`)
+}
+
 async function resolveProjectId(userId: string, input: ToolInput): Promise<string | null | undefined> {
   if (hasOwnKey(input, 'projectId')) {
-    return hasValue(input.projectId) ? String(input.projectId) : null
+    if (!hasValue(input.projectId)) return null
+
+    const projectId = String(input.projectId)
+    await assertEntityOwnership(userId, 'project', projectId)
+    return projectId
   }
 
   if (!hasOwnKey(input, 'projectName')) return undefined
@@ -764,7 +832,11 @@ async function resolveProjectId(userId: string, input: ToolInput): Promise<strin
 
 async function resolveSubjectId(userId: string, input: ToolInput): Promise<string | null | undefined> {
   if (hasOwnKey(input, 'subjectId')) {
-    return hasValue(input.subjectId) ? String(input.subjectId) : null
+    if (!hasValue(input.subjectId)) return null
+
+    const subjectId = String(input.subjectId)
+    await assertEntityOwnership(userId, 'subject', subjectId)
+    return subjectId
   }
 
   if (!hasOwnKey(input, 'subjectName')) return undefined
@@ -810,6 +882,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_transaction': {
         const { id, date, ...rest } = input
+        await assertEntityOwnership(userId, 'transaction', id)
         await prisma.transaction.update({
           where: { id },
           data: {
@@ -821,6 +894,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_transaction': {
+        await assertEntityOwnership(userId, 'transaction', input.id)
         await prisma.transaction.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Transação removida com sucesso' })
       }
@@ -843,11 +917,13 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_budget': {
         const { id, ...rest } = input
+        await assertEntityOwnership(userId, 'budget', id)
         await prisma.budget.update({ where: { id }, data: rest })
         return JSON.stringify({ success: true, message: 'Orçamento atualizado' })
       }
 
       case 'delete_budget': {
+        await assertEntityOwnership(userId, 'budget', input.id)
         await prisma.budget.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Orçamento removido' })
       }
@@ -870,6 +946,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_goal': {
         const { id, targetDate, ...rest } = input
+        await assertEntityOwnership(userId, 'goal', id)
         await prisma.goal.update({
           where: { id },
           data: {
@@ -881,11 +958,13 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_goal': {
+        await assertEntityOwnership(userId, 'goal', input.id)
         await prisma.goal.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Meta removida' })
       }
 
       case 'create_key_result': {
+        await assertEntityOwnership(userId, 'goal', input.goalId)
         const record = await prisma.keyResult.create({
           data: {
             goalId: input.goalId,
@@ -899,11 +978,13 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_key_result': {
         const { id, ...rest } = input
+        await assertEntityOwnership(userId, 'keyResult', id)
         await prisma.keyResult.update({ where: { id }, data: rest })
         return JSON.stringify({ success: true, message: 'Key Result atualizado' })
       }
 
       case 'delete_key_result': {
+        await assertEntityOwnership(userId, 'keyResult', input.id)
         await prisma.keyResult.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Key Result removido' })
       }
@@ -924,16 +1005,19 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_habit': {
         const { id, ...rest } = input
+        await assertEntityOwnership(userId, 'habit', id)
         await prisma.habit.update({ where: { id }, data: rest })
         return JSON.stringify({ success: true, message: 'Hábito atualizado' })
       }
 
       case 'delete_habit': {
+        await assertEntityOwnership(userId, 'habit', input.id)
         await prisma.habit.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Hábito removido' })
       }
 
       case 'log_habit': {
+        await assertEntityOwnership(userId, 'habit', input.habitId)
         const record = await prisma.habitLog.create({
           data: {
             habitId: input.habitId,
@@ -963,6 +1047,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_task': {
         const { id, dueDate, ...rest } = input
+        await assertEntityOwnership(userId, 'task', id)
         await prisma.task.update({
           where: { id },
           data: {
@@ -974,6 +1059,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_task': {
+        await assertEntityOwnership(userId, 'task', input.id)
         await prisma.task.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Tarefa removida' })
       }
@@ -999,6 +1085,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_gtd_task': {
         const { id, dueDate, estimatedMin, ...rest } = input
+        await assertEntityOwnership(userId, 'gtdTask', id)
         await prisma.gtdTask.update({
           where: { id },
           data: {
@@ -1011,6 +1098,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_gtd_task': {
+        await assertEntityOwnership(userId, 'gtdTask', input.id)
         await prisma.gtdTask.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Tarefa GTD removida' })
       }
@@ -1034,6 +1122,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_project_task': {
         const { id, dueDate, estimatedMin, projectId: _projectId, projectName: _projectName, ...rest } = input
+        await assertEntityOwnership(userId, 'projectTask', id)
         const projectId = await resolveProjectId(userId, input)
         await prisma.projectTask.update({
           where: { id },
@@ -1048,6 +1137,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_project_task': {
+        await assertEntityOwnership(userId, 'projectTask', input.id)
         await prisma.projectTask.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Tarefa de projeto removida' })
       }
@@ -1071,6 +1161,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_assignment': {
         const { id, dueDate, grade, subjectId: _subjectId, subjectName: _subjectName, ...rest } = input
+        await assertEntityOwnership(userId, 'assignment', id)
         const subjectId = await resolveSubjectId(userId, input)
         await prisma.assignment.update({
           where: { id },
@@ -1085,6 +1176,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_assignment': {
+        await assertEntityOwnership(userId, 'assignment', input.id)
         await prisma.assignment.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Trabalho academico removido' })
       }
@@ -1107,6 +1199,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_contact': {
         const { id, lastContact, ...rest } = input
+        await assertEntityOwnership(userId, 'contact', id)
         await prisma.contact.update({
           where: { id },
           data: {
@@ -1118,11 +1211,13 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_contact': {
+        await assertEntityOwnership(userId, 'contact', input.id)
         await prisma.contact.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Contato removido' })
       }
 
       case 'log_interaction': {
+        await assertEntityOwnership(userId, 'contact', input.contactId)
         const record = await prisma.interaction.create({
           data: {
             contactId: input.contactId,
@@ -1140,6 +1235,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'create_commitment': {
+        await assertEntityOwnership(userId, 'contact', input.contactId)
         const record = await prisma.commitment.create({
           data: {
             contactId: input.contactId,
@@ -1153,6 +1249,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_commitment': {
         const { id, dueDate, ...rest } = input
+        await assertEntityOwnership(userId, 'commitment', id)
         await prisma.commitment.update({
           where: { id },
           data: {
@@ -1164,6 +1261,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_commitment': {
+        await assertEntityOwnership(userId, 'commitment', input.id)
         await prisma.commitment.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Compromisso removido' })
       }
@@ -1184,6 +1282,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_book': {
         const { id, startedAt, finishedAt, ...rest } = input
+        await assertEntityOwnership(userId, 'book', id)
         await prisma.book.update({
           where: { id },
           data: {
@@ -1196,6 +1295,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_book': {
+        await assertEntityOwnership(userId, 'book', input.id)
         await prisma.book.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Livro removido' })
       }
@@ -1216,6 +1316,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_course': {
         const { id, startedAt, completedAt, ...rest } = input
+        await assertEntityOwnership(userId, 'course', id)
         await prisma.course.update({
           where: { id },
           data: {
@@ -1228,6 +1329,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_course': {
+        await assertEntityOwnership(userId, 'course', input.id)
         await prisma.course.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Curso removido' })
       }
@@ -1249,11 +1351,13 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_skill': {
         const { id, ...rest } = input
+        await assertEntityOwnership(userId, 'skill', id)
         await prisma.skill.update({ where: { id }, data: rest })
         return JSON.stringify({ success: true, message: 'Habilidade atualizada' })
       }
 
       case 'delete_skill': {
+        await assertEntityOwnership(userId, 'skill', input.id)
         await prisma.skill.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Habilidade removida' })
       }
@@ -1274,6 +1378,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
 
       case 'update_diary_entry': {
         const { id, tags, ...rest } = input
+        await assertEntityOwnership(userId, 'diaryEntry', id)
         await prisma.diaryEntry.update({
           where: { id },
           data: {
@@ -1285,6 +1390,7 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       }
 
       case 'delete_diary_entry': {
+        await assertEntityOwnership(userId, 'diaryEntry', input.id)
         await prisma.diaryEntry.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Entrada de diário removida' })
       }

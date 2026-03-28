@@ -11,6 +11,13 @@ export async function POST(req: Request) {
   try {
     const { habitId, date } = await req.json()
     const logDate = new Date(date)
+    const habit = await prisma.habit.findFirst({
+      where: { id: habitId, userId: session.user.id },
+      select: { id: true },
+    })
+    if (!habit) {
+      return NextResponse.json({ error: 'Habito nao encontrado' }, { status: 404 })
+    }
 
     // Check if already logged today
     const existing = await prisma.habitLog.findFirst({
@@ -36,7 +43,7 @@ export async function POST(req: Request) {
 
     // Update streak
     await prisma.habit.update({
-      where: { id: habitId },
+      where: { id: habitId, userId: session.user.id },
       data: { streak: { increment: 1 } },
     })
 

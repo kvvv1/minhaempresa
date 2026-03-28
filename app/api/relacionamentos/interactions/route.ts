@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     // Update lastContact on the contact
     await prisma.contact.update({
-      where: { id: contactId },
+      where: { id: contactId, userId: session.user.id },
       data: { lastContact: new Date() },
     })
 
