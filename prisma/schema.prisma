@@ -51,6 +51,7 @@ model User {
   meetings         Meeting[]
   timeEntries      TimeEntry[]
   gtdTasks         GtdTask[]
+  savingsGoals     SavingsGoal[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -263,6 +264,7 @@ model Contact {
   email        String?
   phone        String?
   notes        String?
+  birthday     DateTime?
   followUpDays Int           @default(30)
   lastContact  DateTime?
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -731,4 +733,20 @@ enum GtdEnergy {
   LOW
   MEDIUM
   HIGH
+}
+
+// ─── Financeiro — Metas de Poupança ──────────────────────────────────────────
+
+model SavingsGoal {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  targetAmount Float
+  currentAmount Float   @default(0)
+  deadline    DateTime?
+  notes       String?
+  achieved    Boolean   @default(false)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
