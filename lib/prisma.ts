@@ -15,7 +15,7 @@ function createPrismaClient() {
 
   if (databaseUrl.startsWith('file:')) {
     throw new Error(
-      'DATABASE_URL must point to PostgreSQL. Use scripts/migrate-to-prod.mjs only for one-time legacy SQLite import.',
+      'DATABASE_URL must point to PostgreSQL. Use scripts/migrate-sqlite-to-postgres.mjs only for one-time legacy SQLite import.',
     )
   }
 
