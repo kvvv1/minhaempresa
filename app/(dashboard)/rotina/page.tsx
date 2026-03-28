@@ -361,11 +361,12 @@ function COOChatPanel({ habits, tasks }: { habits: Habit[]; tasks: Task[] }) {
         }),
       })
 
+      const responseText = (await res.text()).trim()
+
       if (res.ok) {
-        const { response } = await res.json()
-        setMessages(prev => [...prev, { role: 'assistant', content: response }])
+        setMessages(prev => [...prev, { role: 'assistant', content: responseText || 'Nao consegui processar sua solicitacao. Tente novamente.' }])
       } else {
-        toast.error('Erro ao conectar com o COO.')
+        toast.error(responseText || 'Erro ao conectar com o COO.')
       }
     } catch {
       toast.error('Erro de conexão.')

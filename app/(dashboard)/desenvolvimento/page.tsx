@@ -149,9 +149,11 @@ function AIChatPanel({
           },
         }),
       })
+      const responseText = (await res.text()).trim()
       if (res.ok) {
-        const data = await res.json()
-        setMessages(m => [...m, { role: 'assistant', content: data.response }])
+        setMessages(m => [...m, { role: 'assistant', content: responseText || 'Nao consegui processar sua solicitacao. Tente novamente.' }])
+      } else {
+        toast.error(responseText || 'Erro no chat com P&D')
       }
     } catch {
       toast.error('Erro no chat com P&D')

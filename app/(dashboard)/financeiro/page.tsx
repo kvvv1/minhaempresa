@@ -511,10 +511,22 @@ function CFOChatPanel({
           },
         }),
       })
-      if (res.ok) {
-        const data = await res.json()
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-      }
+      const responseText = (await res.text()).trim()
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: responseText || (res.ok ? 'Nao consegui processar sua solicitacao. Tente novamente.' : 'Nao foi possivel falar com o CFO agora.'),
+        },
+      ])
+    } catch {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Nao foi possivel falar com o CFO agora.',
+        },
+      ])
     } finally {
       setLoading(false)
     }
