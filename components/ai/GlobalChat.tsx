@@ -151,6 +151,7 @@ export function GlobalChat() {
   const [responseMode, setResponseMode] = useState<ResponseMode>('orchestrated')
   const [statusText, setStatusText] = useState('')
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set())
+  const [panelOpen, setPanelOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -309,41 +310,16 @@ export function GlobalChat() {
   const activeEmployees = employees.filter((employee) => activeRoles.has(employee.role))
 
   return (
-    <div className="flex h-full max-h-[calc(100vh-8rem)] flex-col">
-      <div className="mb-4 rounded-3xl border border-border/50 bg-[radial-gradient(circle_at_top_left,rgba(79,70,229,0.16),transparent_42%),linear-gradient(180deg,rgba(15,23,42,0.08),transparent)] p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-                <Sparkles className="mr-1.5 h-3 w-3" />
-                Memoria local ativa
-              </Badge>
-              <Badge variant="outline" className="border-border/60">
-                {activeEmployees.length} participantes
-              </Badge>
-            </div>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              O Chief of Staff agora conduz a conversa e chama apenas os especialistas necessarios.
-              O historico fica salvo localmente e o contexto recente segue para a IA em formato comprimido.
-            </p>
-          </div>
-
-          <Button variant="ghost" size="sm" onClick={resetConversation} className="text-muted-foreground">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Limpar conversa
-          </Button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Bot className="h-3.5 w-3.5" />
-            Modo:
-          </span>
+    <div className="flex h-full max-h-[calc(100vh-7rem)] flex-col gap-2">
+      {/* ── Toolbar compacta ─────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border/50 bg-card/60 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Modo */}
           <button
             onClick={() => setResponseMode('orchestrated')}
             disabled={loading}
             className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+              'rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
               responseMode === 'orchestrated'
                 ? 'border-primary/40 bg-primary text-primary-foreground'
                 : 'border-border/60 text-muted-foreground hover:border-border'
@@ -355,7 +331,7 @@ export function GlobalChat() {
             onClick={() => setResponseMode('full-board')}
             disabled={loading}
             className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+              'rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
               responseMode === 'full-board'
                 ? 'border-primary/40 bg-primary text-primary-foreground'
                 : 'border-border/60 text-muted-foreground hover:border-border'
@@ -363,35 +339,85 @@ export function GlobalChat() {
           >
             Board completo
           </button>
+
+          <div className="mx-1 h-4 w-px bg-border/50" />
+
+          {/* Avatares dos participantes ativos */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex -space-x-1.5">
+              {employees.map((employee) => {
+                const active = activeRoles.has(employee.role)
+                return (
+                  <button
+                    key={employee.role}
+                    onClick={() => toggleRole(employee.role)}
+                    disabled={loading}
+                    title={`${employee.name} · ${EMPLOYEE_ROLE_LABELS[employee.role]}`}
+                    className={cn(
+                      'h-6 w-6 rounded-full border-2 border-background text-[9px] font-bold text-white transition-all',
+                      active
+                        ? (EMPLOYEE_COLORS[employee.role] ?? 'bg-primary')
+                        : 'bg-muted opacity-40 grayscale'
+                    )}
+                  >
+                    {employee.name.slice(0, 2).toUpperCase()}
+                  </button>
+                )
+              })}
+            </div>
+            <span className="text-xs text-muted-foreground">{activeEmployees.length} ativos</span>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1">
+            <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary py-0 text-[10px]">
+              <Sparkles className="mr-1 h-2.5 w-2.5" />
+              Local
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={resetConversation} className="h-7 px-2 text-muted-foreground">
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPanelOpen((v) => !v)}
+              className="h-7 px-2 text-muted-foreground"
+              title="Expandir opções"
+            >
+              {panelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Users className="h-3.5 w-3.5" />
-            Participantes:
-          </span>
-          {employees.map((employee) => {
-            const active = activeRoles.has(employee.role)
-            const color = EMPLOYEE_COLORS[employee.role] ?? 'bg-primary'
-
-            return (
-              <button
-                key={employee.role}
-                onClick={() => toggleRole(employee.role)}
-                disabled={loading}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
-                  active
-                    ? cn(color, 'border-transparent text-white')
-                    : 'border-border/60 text-muted-foreground hover:border-border'
-                )}
-              >
-                <span>{employee.name}</span>
-                <span className="opacity-70">· {EMPLOYEE_ROLE_LABELS[employee.role]}</span>
-              </button>
-            )
-          })}
-        </div>
+        {/* Painel expandido */}
+        {panelOpen && (
+          <div className="mt-3 border-t border-border/40 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Users className="h-3.5 w-3.5" /> Participantes:
+              </span>
+              {employees.map((employee) => {
+                const active = activeRoles.has(employee.role)
+                const color = EMPLOYEE_COLORS[employee.role] ?? 'bg-primary'
+                return (
+                  <button
+                    key={employee.role}
+                    onClick={() => toggleRole(employee.role)}
+                    disabled={loading}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all',
+                      active
+                        ? cn(color, 'border-transparent text-white')
+                        : 'border-border/60 text-muted-foreground hover:border-border'
+                    )}
+                  >
+                    {employee.name}
+                    <span className="opacity-70">· {EMPLOYEE_ROLE_LABELS[employee.role]}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden rounded-3xl border border-border/50 bg-background/80 shadow-sm">
