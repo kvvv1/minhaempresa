@@ -33,8 +33,8 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <div className="hidden md:flex w-64 flex-col bg-sidebar border-r border-border/40 h-screen">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-border/40">
+    <div className="hidden md:flex w-64 flex-col bg-sidebar border-r border-border/40 h-full">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40 shrink-0">
         <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 border border-primary/20">
           <Building2 className="w-5 h-5 text-primary" />
         </div>
@@ -44,8 +44,8 @@ export function Sidebar() {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 py-4">
-        <nav className="px-3 space-y-1">
+      <ScrollArea className="flex-1 min-h-0 py-2">
+        <nav className="px-3 space-y-0.5">
           {navigation.map((item) => {
             const isActive = pathname === item.href
             return (
@@ -53,7 +53,7 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
+                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group',
                   isActive
                     ? 'bg-primary/10 text-primary border border-primary/20'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
@@ -68,11 +68,11 @@ export function Sidebar() {
         </nav>
       </ScrollArea>
 
-      <div className="p-3 border-t border-border/40 space-y-1">
+      <div className="p-3 border-t border-border/40 space-y-0.5 shrink-0">
         <Link
           href="/configuracoes"
           className={cn(
-            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
+            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group',
             pathname === '/configuracoes'
               ? 'bg-primary/10 text-primary border border-primary/20'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
