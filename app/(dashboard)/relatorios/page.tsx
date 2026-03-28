@@ -219,7 +219,7 @@ export default function RelatoriosPage() {
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                           <XAxis dataKey="week" tick={{ fontSize: 10 }} />
                           <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v}`} />
-                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} />
                           <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -246,7 +246,7 @@ export default function RelatoriosPage() {
                               <Cell key={i} fill={COLORS[i % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} />
                           <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                         </PieChart>
                       </ResponsiveContainer>
@@ -267,7 +267,7 @@ export default function RelatoriosPage() {
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                           <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                           <YAxis domain={[1, 10]} tick={{ fontSize: 10 }} />
-                          <Tooltip formatter={(v: number) => `${v}/10`} />
+                          <Tooltip formatter={(v) => `${v}/10`} />
                           <Line type="monotone" dataKey="mood" stroke="#8b5cf6" strokeWidth={2} dot={false} />
                         </LineChart>
                       </ResponsiveContainer>
