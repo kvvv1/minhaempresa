@@ -262,6 +262,56 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nao foi possivel organizar o board' }, { status: 500 })
     }
 
+    // Busca dados reais do usuário para contextualizar a IA
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+    const [
+      transactions, budgets, goals, habits, habitLogs, tasks,
+      contacts, interactions, books, courses, skills,
+      diaryEntries, workouts, sleepLogs, meals,
+      subjects, assignments, projects, projectTasks, gtdTasks,
+    ] = await Promise.all([
+      prisma.transaction.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 50 }),
+      prisma.budget.findMany({ where: { userId } }),
+      prisma.goal.findMany({ where: { userId }, include: { keyResults: true } }),
+      prisma.habit.findMany({ where: { userId, isActive: true } }),
+      prisma.habitLog.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
+      prisma.task.findMany({ where: { userId } }),
+      prisma.contact.findMany({ where: { userId } }),
+      prisma.interaction.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 20 }),
+      prisma.book.findMany({ where: { userId } }),
+      prisma.course.findMany({ where: { userId } }),
+      prisma.skill.findMany({ where: { userId } }),
+      prisma.diaryEntry.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 10 }),
+      prisma.workout.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 10 }),
+      prisma.sleepLog.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 7 }),
+      prisma.meal.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
+      prisma.subject.findMany({ where: { userId } }),
+      prisma.assignment.findMany({ where: { userId } }),
+      prisma.project.findMany({ where: { userId } }),
+      prisma.projectTask.findMany({ where: { userId } }),
+      prisma.gtdTask.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' }, take: 30 }),
+    ])
+
+    const income = transactions.filter((t) => t.type === 'INCOME' && new Date(t.date) >= monthStart).reduce((s, t) => s + t.amount, 0)
+    const expenses = transactions.filter((t) => t.type === 'EXPENSE' && new Date(t.date) >= monthStart).reduce((s, t) => s + t.amount, 0)
+
+    const userData = {
+      financeiro: { transactions: transactions.slice(0, 20), budgets, income, expenses, balance: income - expenses },
+      metas: goals,
+      rotina: { habits, habitLogs, tasks },
+      relacionamentos: { contacts, interactions },
+      desenvolvimento: { books, courses, skills },
+      diario: diaryEntries,
+      saude: { workouts, sleepLogs },
+      nutricao: { meals },
+      faculdade: { subjects, assignments },
+      trabalho: { projects, projectTasks },
+      tarefas: gtdTasks,
+    }
+
     const consulted = await Promise.all(
       panel.map(async (employee) => {
         const specialistHistory = appendInstructionToLatestUserMessage(
@@ -279,7 +329,7 @@ export async function POST(req: Request) {
           ].join('\n')
         )
 
-        const response = await chatWithEmployee(employee as any, null, specialistHistory)
+        const response = await chatWithEmployee(employee as any, userData, specialistHistory)
 
         return {
           employeeRole: employee.role,
@@ -316,7 +366,7 @@ export async function POST(req: Request) {
       ].join('\n\n')
     )
 
-    const leadResponse = await runEmployeeAgent(lead as any, null, leadHistory, {
+    const leadResponse = await runEmployeeAgent(lead as any, userData, leadHistory, {
       tools: getToolsForRole(lead.role),
       maxIterations: 10,
       maxTokens: 2048,
