@@ -7,7 +7,12 @@ const client = new Anthropic({
 const EMPTY_RESPONSE_FALLBACK =
   'Não consegui formular uma resposta útil agora. Tente reformular sua pergunta.'
 
-type EmployeeChatMessage = { role: 'user' | 'assistant'; content: string }
+type EmployeeChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+  imageData?: string     // base64 sem o prefixo data:...
+  imageMimeType?: string // ex: image/jpeg
+}
 type ToolExecutor = (toolName: string, input: Record<string, unknown>) => Promise<string>
 
 interface EmployeeSystemPromptOptions {
@@ -201,16 +206,49 @@ export async function runEmployeeAgent(
       model: 'claude-sonnet-4-6',
       max_tokens: options.maxTokens ?? 1024,
       system: systemPrompt,
-      messages,
+      messages: messages.map((message) => {
+        if (message.imageData && message.role === 'user') {
+          return {
+            role: 'user' as const,
+            content: [
+              {
+                type: 'image' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: (message.imageMimeType ?? 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                  data: message.imageData,
+                },
+              },
+              { type: 'text' as const, text: message.content || 'Analise esta imagem.' },
+            ],
+          }
+        }
+        return { role: message.role, content: message.content }
+      }),
     })
 
     return getTextFromContent(response.content) || EMPTY_RESPONSE_FALLBACK
   }
 
-  const loopMessages: Anthropic.MessageParam[] = messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-  }))
+  const loopMessages: Anthropic.MessageParam[] = messages.map((message) => {
+    if (message.imageData && message.role === 'user') {
+      return {
+        role: 'user',
+        content: [
+          {
+            type: 'image' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: (message.imageMimeType ?? 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+              data: message.imageData,
+            },
+          },
+          { type: 'text' as const, text: message.content || 'Analise esta imagem.' },
+        ],
+      }
+    }
+    return { role: message.role, content: message.content }
+  })
 
   let finalText = ''
   let lastToolSummary = ''

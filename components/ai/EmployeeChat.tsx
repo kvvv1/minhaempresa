@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Loader2, RefreshCw, Send, User } from 'lucide-react'
+import { Bot, ImagePlus, Loader2, RefreshCw, Send, User, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -19,6 +19,9 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   timestamp: Date
+  imageData?: string
+  imageMimeType?: string
+  imagePreview?: string
 }
 
 interface EmployeeChatProps {
@@ -81,7 +84,9 @@ export function EmployeeChat({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const [pendingImage, setPendingImage] = useState<{ data: string; mimeType: string; preview: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -115,16 +120,43 @@ export function EmployeeChat({
     localStorage.removeItem(getStorageKey(employeeRole))
   }
 
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 1200
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+        else { width = Math.round(width * MAX / height); height = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width; canvas.height = height
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+      URL.revokeObjectURL(objectUrl)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+      setPendingImage({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg', preview: dataUrl })
+    }
+    img.src = objectUrl
+  }
+
   async function sendMessage() {
     const trimmedInput = input.trim()
-    if (!trimmedInput || loading) return
+    if ((!trimmedInput && !pendingImage) || loading) return
 
     const userMessage: Message = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role: 'user',
-      content: trimmedInput,
+      content: trimmedInput || 'Analise esta imagem.',
       timestamp: new Date(),
+      imageData: pendingImage?.data,
+      imageMimeType: pendingImage?.mimeType,
+      imagePreview: pendingImage?.preview,
     }
+    setPendingImage(null)
 
     const nextHistory = [...messages, userMessage]
     const placeholder: Message = {
@@ -144,7 +176,12 @@ export function EmployeeChat({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeRole,
-          messages: buildRequestMessages(nextHistory),
+          messages: buildRequestMessages(nextHistory).map((m, i) => {
+            const orig = nextHistory[i]
+            return orig?.role === 'user' && orig.imageData
+              ? { ...m, imageData: orig.imageData, imageMimeType: orig.imageMimeType }
+              : m
+          }),
           moduleData,
         }),
       })
@@ -252,7 +289,12 @@ export function EmployeeChat({
                   )}
                 >
                   {message.role === 'user' ? (
-                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                    <>
+                      {message.imagePreview && (
+                        <img src={message.imagePreview} alt="anexo" className="mb-2 max-h-40 rounded-xl object-cover" />
+                      )}
+                      <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                    </>
                   ) : (
                     <ChatRichText content={message.content} />
                   )}
@@ -294,16 +336,38 @@ export function EmployeeChat({
         </ScrollArea>
 
         <div className="shrink-0 border-t border-border/50 p-4">
+          {pendingImage && (
+            <div className="relative mb-2 w-fit">
+              <img src={pendingImage.preview} alt="preview" className="h-16 rounded-xl object-cover border border-border/50" />
+              <button
+                onClick={() => setPendingImage(null)}
+                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
           <div className="flex gap-2">
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              className="h-12 w-12 shrink-0 rounded-2xl"
+              title="Anexar imagem"
+            >
+              <ImagePlus className="h-4 w-4" />
+            </Button>
             <Input
-              placeholder={`Falar com ${employeeName}...`}
+              placeholder={pendingImage ? 'O que fazer com esta imagem? (opcional)' : `Falar com ${employeeName}...`}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && sendMessage()}
               disabled={loading}
               className="h-12 flex-1 rounded-2xl"
             />
-            <Button onClick={sendMessage} disabled={loading || !input.trim()} size="icon" className="h-12 w-12 rounded-2xl">
+            <Button onClick={sendMessage} disabled={loading || (!input.trim() && !pendingImage)} size="icon" className="h-12 w-12 rounded-2xl">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>

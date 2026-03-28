@@ -5,12 +5,14 @@ import {
   Bot,
   ChevronDown,
   ChevronUp,
+  ImagePlus,
   Loader2,
   RefreshCw,
   Send,
   Sparkles,
   User,
   Users,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +46,9 @@ interface UserChatMessage {
   id: string
   kind: 'user'
   timestamp: Date
+  imageData?: string
+  imageMimeType?: string
+  imagePreview?: string  // data URL para exibição (não persiste no localStorage)
 }
 
 interface BoardChatMessage {
@@ -105,26 +110,30 @@ function deserializeMessages(
 }
 
 function buildRequestMessages(history: ChatMessage[]) {
-  const flatHistory = history.flatMap((message) => {
+  type FlatEntry = { role: string; content: string; employeeRole?: string; imageData?: string; imageMimeType?: string }
+  const flatHistory: FlatEntry[] = []
+  for (const message of history) {
     if (!isBoardMessage(message)) {
-      return [{ role: 'user', content: message.content }]
+      flatHistory.push({ role: 'user', content: message.content, imageData: message.imageData, imageMimeType: message.imageMimeType })
+    } else {
+      flatHistory.push({ role: 'employee', content: message.content, employeeRole: message.leadRole })
+      for (const entry of message.consulted) {
+        flatHistory.push({ role: 'employee', content: entry.response, employeeRole: entry.employeeRole })
+      }
     }
+  }
 
-    return [
-      {
-        role: 'employee',
-        content: message.content,
-        employeeRole: message.leadRole,
-      },
-      ...message.consulted.map((entry) => ({
-        role: 'employee',
-        content: entry.response,
-        employeeRole: entry.employeeRole,
-      })),
-    ]
-  })
+  const compressed = compressFlatHistory(
+    flatHistory.map((m) => ({ role: m.role as 'user' | 'employee', content: m.content, employeeRole: m.employeeRole })),
+    MAX_HISTORY_MESSAGES
+  )
 
-  return compressFlatHistory(flatHistory, MAX_HISTORY_MESSAGES)
+  // Reanexa imageData nas mensagens comprimidas correspondentes
+  return compressed.map((m, i) => ({
+    ...m,
+    imageData: flatHistory[i]?.imageData,
+    imageMimeType: flatHistory[i]?.imageMimeType,
+  }))
 }
 
 function validateConsultedResponses(payload: unknown): ConsultedResponse[] {
@@ -152,8 +161,10 @@ export function GlobalChat() {
   const [statusText, setStatusText] = useState('')
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set())
   const [panelOpen, setPanelOpen] = useState(false)
+  const [pendingImage, setPendingImage] = useState<{ data: string; mimeType: string; preview: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -235,16 +246,45 @@ export function GlobalChat() {
     })
   }
 
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 1200
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+        else { width = Math.round(width * MAX / height); height = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+      URL.revokeObjectURL(objectUrl)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+      setPendingImage({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg', preview: dataUrl })
+    }
+    img.src = objectUrl
+  }
+
   async function sendMessage() {
     const trimmedInput = input.trim()
-    if (!trimmedInput || loading) return
+    if ((!trimmedInput && !pendingImage) || loading) return
 
     const userMessage: UserChatMessage = {
       id: createMessageId(),
       kind: 'user',
-      content: trimmedInput,
+      content: trimmedInput || 'Analise esta imagem.',
       timestamp: new Date(),
+      imageData: pendingImage?.data,
+      imageMimeType: pendingImage?.mimeType,
+      imagePreview: pendingImage?.preview,
     }
+    setPendingImage(null)
 
     const nextHistory = [...messages, userMessage]
     setMessages(nextHistory)
@@ -458,6 +498,9 @@ export function GlobalChat() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="rounded-[24px] rounded-tr-sm bg-primary px-4 py-3 text-primary-foreground shadow-sm">
+                      {message.imagePreview && (
+                        <img src={message.imagePreview} alt="anexo" className="mb-2 max-h-48 rounded-xl object-cover" />
+                      )}
                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
                       <p className="mt-1 text-right text-xs text-primary-foreground/65">
                         {message.timestamp.toLocaleTimeString('pt-BR', {
@@ -594,23 +637,49 @@ export function GlobalChat() {
         </ScrollArea>
       </div>
 
-      <div className="mt-4 flex gap-2">
-        <Input
-          ref={inputRef}
-          placeholder={
-            responseMode === 'orchestrated'
-              ? 'Fale com o board. O Chief of Staff coordena a resposta...'
-              : 'Abra a mesa toda para discutir esta pauta...'
-          }
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && sendMessage()}
-          disabled={loading}
-          className="h-12 flex-1 rounded-2xl"
-        />
-        <Button onClick={sendMessage} disabled={loading || !input.trim()} size="icon" className="h-12 w-12 rounded-2xl">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
+      <div className="flex flex-col gap-2">
+        {pendingImage && (
+          <div className="relative w-fit">
+            <img src={pendingImage.preview} alt="preview" className="h-20 rounded-xl object-cover border border-border/50" />
+            <button
+              onClick={() => setPendingImage(null)}
+              className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            className="h-12 w-12 shrink-0 rounded-2xl"
+            title="Anexar imagem"
+          >
+            <ImagePlus className="h-4 w-4" />
+          </Button>
+          <Input
+            ref={inputRef}
+            placeholder={
+              pendingImage
+                ? 'Descreva o que quer fazer com a imagem (opcional)...'
+                : responseMode === 'orchestrated'
+                  ? 'Fale com o board. O Chief of Staff coordena a resposta...'
+                  : 'Abra a mesa toda para discutir esta pauta...'
+            }
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && sendMessage()}
+            disabled={loading}
+            className="h-12 flex-1 rounded-2xl"
+          />
+          <Button onClick={sendMessage} disabled={loading || (!input.trim() && !pendingImage)} size="icon" className="h-12 w-12 rounded-2xl">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
     </div>
   )

@@ -46,8 +46,10 @@ const schema = z.object({
     .array(
       z.object({
         role: z.enum(['user', 'employee']),
-        content: z.string().trim().min(1).max(4000),
+        content: z.string().trim().max(4000).default(''),
         employeeRole: z.string().optional(),
+        imageData: z.string().optional(),
+        imageMimeType: z.string().optional(),
       })
     )
     .min(1)
@@ -132,6 +134,8 @@ function buildHistoryForEmployee(messages: MultiMessage[], employeeRole: string)
       message.role === 'employee' && message.employeeRole !== employeeRole
         ? `[${message.employeeRole} disse: ${message.content}]`
         : message.content,
+    imageData: message.role === 'user' ? message.imageData : undefined,
+    imageMimeType: message.role === 'user' ? message.imageMimeType : undefined,
   }))
 }
 

@@ -20,7 +20,9 @@ const chatSchema = z.object({
     .array(
       z.object({
         role: z.enum(['user', 'assistant']),
-        content: z.string().trim().min(1).max(4000),
+        content: z.string().trim().max(4000).default(''),
+        imageData: z.string().optional(),
+        imageMimeType: z.string().optional(),
       })
     )
     .min(1)
