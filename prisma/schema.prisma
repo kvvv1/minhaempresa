@@ -1,0 +1,734 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  companyName   String    @default("Minha Vida S.A.")
+  mission       String?
+  values             String    @default("[]")
+  notificationPrefs  String    @default("{}")
+  onboarded          Boolean   @default(false)
+  foundedAt     DateTime  @default(now())
+  accounts      Account[]
+  sessions      Session[]
+  employees     Employee[]
+  transactions  Transaction[]
+  budgets       Budget[]
+  goals         Goal[]
+  habits        Habit[]
+  habitLogs     HabitLog[]
+  tasks         Task[]
+  contacts      Contact[]
+  interactions  Interaction[]
+  commitments   Commitment[]
+  books         Book[]
+  courses       Course[]
+  skills        Skill[]
+  diaryEntries  DiaryEntry[]
+  notifications    Notification[]
+  valuations       CompanyValuation[]
+  workouts         Workout[]
+  bodyMetrics      BodyMetric[]
+  sleepLogs        SleepLog[]
+  hydrationLogs    HydrationLog[]
+  meals            Meal[]
+  mealPlans        MealPlan[]
+  subjects         Subject[]
+  assignments      Assignment[]
+  studySessions    StudySession[]
+  projects         Project[]
+  projectTasks     ProjectTask[]
+  meetings         Meeting[]
+  timeEntries      TimeEntry[]
+  gtdTasks         GtdTask[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model Employee {
+  id          String       @id @default(cuid())
+  userId      String
+  name        String
+  role        EmployeeRole
+  personality String
+  avatar      String?
+  isActive    Boolean      @default(true)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum EmployeeRole {
+  CFO
+  COO
+  CHRO
+  RD
+  CHIEF_OF_STAFF
+  PERSONAL_TRAINER
+  MENTOR_ACADEMICO
+  PROJECT_MANAGER
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  type        TransactionType
+  amount      Float
+  description String
+  category    String
+  date        DateTime
+  isRecurring Boolean         @default(false)
+  recurringDay Int?
+  budgetId    String?
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budget      Budget?         @relation(fields: [budgetId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model Budget {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  category     String
+  limit        Float
+  month        Int
+  year         Int
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Goal {
+  id          String       @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  category    GoalCategory
+  status      GoalStatus   @default(ACTIVE)
+  progress    Float        @default(0)
+  targetDate  DateTime?
+  quarter     Int?
+  year        Int?
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyResults  KeyResult[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum GoalCategory {
+  FINANCIAL
+  PERSONAL
+  PROFESSIONAL
+  HEALTH
+  RELATIONSHIPS
+  LEARNING
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+model KeyResult {
+  id        String   @id @default(cuid())
+  goalId    String
+  title     String
+  progress  Float    @default(0)
+  target    Float    @default(100)
+  unit      String?
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Habit {
+  id          String         @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  frequency   HabitFrequency
+  targetDays  String         @default("[]")
+  streak      Int            @default(0)
+  bestStreak  Int            @default(0)
+  isActive    Boolean        @default(true)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs        HabitLog[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+enum HabitFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  userId    String
+  date      DateTime
+  completed Boolean  @default(true)
+  note      String?
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id                 String             @id @default(cuid())
+  userId             String
+  title              String
+  description        String?
+  status             TaskStatus         @default(PENDING)
+  priority           TaskPriority       @default(MEDIUM)
+  dueDate            DateTime?
+  isRecurring        Boolean            @default(false)
+  recurringFrequency HabitFrequency?
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Contact {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  relationship String
+  email        String?
+  phone        String?
+  notes        String?
+  followUpDays Int           @default(30)
+  lastContact  DateTime?
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interactions Interaction[]
+  commitments  Commitment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Interaction {
+  id        String   @id @default(cuid())
+  contactId String
+  userId    String
+  type      String
+  notes     String?
+  date      DateTime
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Commitment {
+  id          String           @id @default(cuid())
+  contactId   String
+  userId      String
+  description String
+  dueDate     DateTime?
+  status      CommitmentStatus @default(PENDING)
+  contact     Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+enum CommitmentStatus {
+  PENDING
+  FULFILLED
+  OVERDUE
+}
+
+model Book {
+  id         String     @id @default(cuid())
+  userId     String
+  title      String
+  author     String?
+  status     BookStatus @default(WANT_TO_READ)
+  rating     Int?
+  notes      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+enum BookStatus {
+  WANT_TO_READ
+  READING
+  COMPLETED
+  ABANDONED
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  userId      String
+  title       String
+  platform    String?
+  progress    Float        @default(0)
+  status      CourseStatus @default(NOT_STARTED)
+  notes       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum CourseStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  PAUSED
+}
+
+model Skill {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  category    String
+  level       SkillLevel @default(BEGINNER)
+  targetLevel SkillLevel @default(ADVANCED)
+  notes       String?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model DiaryEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String
+  mood      Int?
+  tags      String   @default("[]")
+  date      DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  read      Boolean          @default(false)
+  module    String?
+  actionUrl String?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ALERT
+  SUCCESS
+  AI_INSIGHT
+}
+
+model CompanyValuation {
+  id        String   @id @default(cuid())
+  userId    String
+  value     Float
+  scores    String   @default("{}")
+  date      DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// ─── Saúde & Fitness ────────────────────────────────────────────────────────
+
+model Workout {
+  id          String            @id @default(cuid())
+  userId      String
+  name        String
+  date        DateTime
+  durationMin Int?
+  notes       String?
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises   WorkoutExercise[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model WorkoutExercise {
+  id        String   @id @default(cuid())
+  workoutId String
+  name      String
+  sets      String   @default("[]")
+  order     Int      @default(0)
+  workout   Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model BodyMetric {
+  id         String   @id @default(cuid())
+  userId     String
+  date       DateTime
+  weightKg   Float?
+  bodyFatPct Float?
+  muscleKg   Float?
+  waistCm    Float?
+  hipCm      Float?
+  chestCm    Float?
+  armCm      Float?
+  thighCm    Float?
+  notes      String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model SleepLog {
+  id          String   @id @default(cuid())
+  userId      String
+  date        DateTime
+  bedtimeAt   DateTime
+  wakeAt      DateTime
+  durationMin Int
+  quality     Int?
+  notes       String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+model HydrationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime
+  mlTotal   Int      @default(0)
+  goalMl    Int      @default(2000)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// ─── Nutrição ────────────────────────────────────────────────────────────────
+
+model Meal {
+  id         String     @id @default(cuid())
+  userId     String
+  name       String
+  type       MealType
+  date       DateTime
+  calories   Int?
+  proteinG   Float?
+  carbsG     Float?
+  fatG       Float?
+  notes      String?
+  mealPlanId String?
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealPlan   MealPlan?  @relation(fields: [mealPlanId], references: [id])
+  items      MealItem[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+enum MealType {
+  BREAKFAST
+  MORNING_SNACK
+  LUNCH
+  AFTERNOON_SNACK
+  DINNER
+  SUPPER
+}
+
+model MealItem {
+  id        String   @id @default(cuid())
+  mealId    String
+  name      String
+  quantityG Float?
+  calories  Int?
+  proteinG  Float?
+  carbsG    Float?
+  fatG      Float?
+  meal      Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model MealPlan {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  weekStart      DateTime
+  targetCalories Int?
+  targetProteinG Float?
+  targetCarbsG   Float?
+  targetFatG     Float?
+  notes          String?
+  isActive       Boolean  @default(false)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meals          Meal[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ─── Faculdade ───────────────────────────────────────────────────────────────
+
+model Subject {
+  id            String         @id @default(cuid())
+  userId        String
+  name          String
+  professor     String?
+  credits       Int?
+  semester      String?
+  targetGrade   Float?
+  currentGrade  Float?
+  status        SubjectStatus  @default(IN_PROGRESS)
+  color         String?
+  schedule      String         @default("[]")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grades        SubjectGrade[]
+  assignments   Assignment[]
+  studySessions StudySession[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum SubjectStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model SubjectGrade {
+  id        String    @id @default(cuid())
+  subjectId String
+  name      String
+  grade     Float
+  weight    Float     @default(1)
+  date      DateTime?
+  notes     String?
+  subject   Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}
+
+model Assignment {
+  id          String           @id @default(cuid())
+  userId      String
+  subjectId   String?
+  title       String
+  description String?
+  dueDate     DateTime?
+  status      AssignmentStatus @default(PENDING)
+  priority    TaskPriority     @default(MEDIUM)
+  grade       Float?
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject?         @relation(fields: [subjectId], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+enum AssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+  OVERDUE
+}
+
+model StudySession {
+  id          String    @id @default(cuid())
+  userId      String
+  subjectId   String?
+  startAt     DateTime
+  endAt       DateTime?
+  durationMin Int?
+  notes       String?
+  technique   String?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject?  @relation(fields: [subjectId], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+// ─── Trabalho / Projetos ─────────────────────────────────────────────────────
+
+model Project {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  priority    TaskPriority  @default(MEDIUM)
+  startDate   DateTime?
+  dueDate     DateTime?
+  color       String?
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       ProjectTask[]
+  meetings    Meeting[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+model ProjectTask {
+  id           String       @id @default(cuid())
+  userId       String
+  projectId    String?
+  title        String
+  description  String?
+  status       KanbanStatus @default(BACKLOG)
+  priority     TaskPriority @default(MEDIUM)
+  dueDate      DateTime?
+  order        Int          @default(0)
+  estimatedMin Int?
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id])
+  timeEntries  TimeEntry[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+enum KanbanStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+model Meeting {
+  id          String    @id @default(cuid())
+  userId      String
+  projectId   String?
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime?
+  location    String?
+  attendees   String    @default("[]")
+  notes       String?
+  actionItems String    @default("[]")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model TimeEntry {
+  id            String       @id @default(cuid())
+  userId        String
+  projectTaskId String?
+  description   String?
+  startAt       DateTime
+  endAt         DateTime?
+  durationMin   Int?
+  billable      Boolean      @default(false)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectTask   ProjectTask? @relation(fields: [projectTaskId], references: [id])
+  createdAt     DateTime     @default(now())
+}
+
+// ─── Tarefas GTD ─────────────────────────────────────────────────────────────
+
+model GtdTask {
+  id           String       @id @default(cuid())
+  userId       String
+  title        String
+  description  String?
+  bucket       GtdBucket    @default(INBOX)
+  status       TaskStatus   @default(PENDING)
+  priority     TaskPriority @default(MEDIUM)
+  dueDate      DateTime?
+  context      String?
+  energy       GtdEnergy?
+  estimatedMin Int?
+  projectRef   String?
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+enum GtdBucket {
+  INBOX
+  TODAY
+  THIS_WEEK
+  SOMEDAY
+  WAITING
+  REFERENCE
+}
+
+enum GtdEnergy {
+  LOW
+  MEDIUM
+  HIGH
+}

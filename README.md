@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vida S.A.
 
-## Getting Started
+Aplicacao Next.js para gerenciar a vida como uma empresa pessoal, com dashboard, rotina, financeiro, metas, relacionamentos, diario e assistentes de IA.
 
-First, run the development server:
+## Stack
+
+- Next.js 16
+- React 19
+- Prisma 7
+- SQLite local
+- NextAuth com credenciais
+- Tailwind CSS 4
+
+## Rodando localmente
+
+1. Instale as dependencias:
+
+```bash
+npm install
+```
+
+2. Gere o client Prisma:
+
+```bash
+npm run db:generate
+```
+
+3. Crie ou atualize o banco SQLite local:
+
+```bash
+npm run db:push
+```
+
+4. Inicie o projeto:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Variaveis de ambiente
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+O projeto usa `.env.local` com estes valores base:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+DATABASE_URL="file:./dev.db"
+NEXTAUTH_SECRET="change-this-to-a-random-secret-string"
+NEXTAUTH_URL="http://localhost:3000"
+ANTHROPIC_API_KEY="your-anthropic-api-key"
+RESEND_API_KEY="your-resend-api-key"
+```
 
-## Learn More
+Sem `ANTHROPIC_API_KEY`, as rotas de IA nao vao responder corretamente.
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run db:generate
+npm run db:push
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Estado atual
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Build de producao esta passando
+- Lint esta passando sem erros
+- Banco local usa SQLite
+- `proxy.ts` substitui o antigo `middleware.ts` para o contrato do Next 16

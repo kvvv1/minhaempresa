@@ -1,0 +1,591 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import {
+  Bot,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  RefreshCw,
+  Send,
+  Sparkles,
+  User,
+  Users,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { ChatRichText } from '@/components/ai/ChatRichText'
+import { compressFlatHistory } from '@/lib/chat-history'
+import { cn, EMPLOYEE_COLORS, EMPLOYEE_ROLE_LABELS, getInitials } from '@/lib/utils'
+import { toast } from 'sonner'
+
+const BOARD_CHAT_STORAGE_KEY = 'vida-sa:board-chat:v2'
+const MAX_HISTORY_MESSAGES = 60
+
+type ResponseMode = 'orchestrated' | 'full-board'
+
+interface EmployeeInfo {
+  id: string
+  name: string
+  role: string
+}
+
+interface ConsultedResponse {
+  employeeRole: string
+  employeeName: string
+  response: string
+}
+
+interface UserChatMessage {
+  content: string
+  id: string
+  kind: 'user'
+  timestamp: Date
+}
+
+interface BoardChatMessage {
+  consulted: ConsultedResponse[]
+  content: string
+  id: string
+  kind: 'board'
+  leadName: string
+  leadRole: string
+  mode: ResponseMode
+  timestamp: Date
+}
+
+type ChatMessage = UserChatMessage | BoardChatMessage
+
+interface StoredBoardChatState {
+  activeRoles: string[]
+  messages: Array<
+    | (Omit<UserChatMessage, 'timestamp'> & { timestamp: string })
+    | (Omit<BoardChatMessage, 'timestamp'> & { timestamp: string })
+  >
+  responseMode: ResponseMode
+}
+
+function createMessageId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function isBoardMessage(message: ChatMessage): message is BoardChatMessage {
+  return message.kind === 'board'
+}
+
+function readStoredState(): StoredBoardChatState | null {
+  try {
+    const raw = localStorage.getItem(BOARD_CHAT_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as StoredBoardChatState
+  } catch {
+    return null
+  }
+}
+
+function deserializeMessages(
+  storedMessages: StoredBoardChatState['messages'] | undefined
+): ChatMessage[] {
+  if (!storedMessages?.length) return []
+
+  return storedMessages.map((message) =>
+    message.kind === 'user'
+      ? {
+          ...message,
+          timestamp: new Date(message.timestamp),
+        }
+      : {
+          ...message,
+          timestamp: new Date(message.timestamp),
+        }
+  )
+}
+
+function buildRequestMessages(history: ChatMessage[]) {
+  const flatHistory = history.flatMap((message) => {
+    if (!isBoardMessage(message)) {
+      return [{ role: 'user', content: message.content }]
+    }
+
+    return [
+      {
+        role: 'employee',
+        content: message.content,
+        employeeRole: message.leadRole,
+      },
+      ...message.consulted.map((entry) => ({
+        role: 'employee',
+        content: entry.response,
+        employeeRole: entry.employeeRole,
+      })),
+    ]
+  })
+
+  return compressFlatHistory(flatHistory, MAX_HISTORY_MESSAGES)
+}
+
+function validateConsultedResponses(payload: unknown): ConsultedResponse[] {
+  if (!Array.isArray(payload)) return []
+
+  return payload.filter(
+    (item): item is ConsultedResponse =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as ConsultedResponse).employeeRole === 'string' &&
+      typeof (item as ConsultedResponse).employeeName === 'string' &&
+      typeof (item as ConsultedResponse).response === 'string' &&
+      (item as ConsultedResponse).response.trim().length > 0
+  )
+}
+
+export function GlobalChat() {
+  const [employees, setEmployees] = useState<EmployeeInfo[]>([])
+  const [activeRoles, setActiveRoles] = useState<Set<string>>(new Set())
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
+  const [responseMode, setResponseMode] = useState<ResponseMode>('orchestrated')
+  const [statusText, setStatusText] = useState('')
+  const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set())
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadBoardState() {
+      try {
+        const response = await fetch('/api/employees')
+        const list = (await response.json()) as EmployeeInfo[]
+        if (cancelled) return
+
+        const storedState = readStoredState()
+        const availableRoles = new Set(list.map((employee) => employee.role))
+        const restoredRoles = storedState?.activeRoles.filter((role) => availableRoles.has(role)) ?? []
+
+        setEmployees(list)
+        setMessages(deserializeMessages(storedState?.messages))
+        setResponseMode(storedState?.responseMode ?? 'orchestrated')
+        setActiveRoles(new Set(restoredRoles.length > 0 ? restoredRoles : list.map((employee) => employee.role)))
+      } catch {
+        if (!cancelled) toast.error('Erro ao carregar funcionarios')
+      } finally {
+        if (!cancelled) setHydrated(true)
+      }
+    }
+
+    loadBoardState()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, statusText])
+
+  useEffect(() => {
+    if (!hydrated) return
+
+    const payload: StoredBoardChatState = {
+      activeRoles: Array.from(activeRoles),
+      responseMode,
+      messages: messages.map((message) => ({
+        ...message,
+        timestamp: message.timestamp.toISOString(),
+      })),
+    }
+
+    localStorage.setItem(BOARD_CHAT_STORAGE_KEY, JSON.stringify(payload))
+  }, [activeRoles, hydrated, messages, responseMode])
+
+  function toggleRole(role: string) {
+    setActiveRoles((previousRoles) => {
+      const nextRoles = new Set(previousRoles)
+      if (nextRoles.has(role)) {
+        if (nextRoles.size === 1) return previousRoles
+        nextRoles.delete(role)
+        return nextRoles
+      }
+
+      nextRoles.add(role)
+      return nextRoles
+    })
+  }
+
+  function resetConversation() {
+    setMessages([])
+    setExpandedRounds(new Set())
+    setStatusText('')
+    localStorage.removeItem(BOARD_CHAT_STORAGE_KEY)
+    setResponseMode('orchestrated')
+  }
+
+  function toggleRound(roundId: string) {
+    setExpandedRounds((previousRounds) => {
+      const nextRounds = new Set(previousRounds)
+      if (nextRounds.has(roundId)) nextRounds.delete(roundId)
+      else nextRounds.add(roundId)
+      return nextRounds
+    })
+  }
+
+  async function sendMessage() {
+    const trimmedInput = input.trim()
+    if (!trimmedInput || loading) return
+
+    const userMessage: UserChatMessage = {
+      id: createMessageId(),
+      kind: 'user',
+      content: trimmedInput,
+      timestamp: new Date(),
+    }
+
+    const nextHistory = [...messages, userMessage]
+    setMessages(nextHistory)
+    setInput('')
+    setLoading(true)
+    setStatusText(
+      responseMode === 'orchestrated'
+        ? 'Chief of Staff alinhando o board e consultando quem importa agora.'
+        : 'Board completo montando seus pareceres para esta rodada.'
+    )
+
+    try {
+      const response = await fetch('/api/ai/chat/multi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: buildRequestMessages(nextHistory),
+          activeRoles: Array.from(activeRoles),
+          responseMode,
+        }),
+      })
+
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(data?.error ?? 'Erro ao consultar o board')
+      }
+
+      const lead = data?.lead
+      if (
+        typeof lead?.employeeRole !== 'string' ||
+        typeof lead?.employeeName !== 'string' ||
+        typeof lead?.response !== 'string' ||
+        lead.response.trim().length === 0
+      ) {
+        throw new Error('O board nao conseguiu montar uma resposta valida')
+      }
+
+      const consulted = validateConsultedResponses(data?.consulted)
+      const boardMessage: BoardChatMessage = {
+        id: createMessageId(),
+        kind: 'board',
+        content: lead.response.trim(),
+        leadRole: lead.employeeRole,
+        leadName: lead.employeeName,
+        mode: data?.mode === 'full-board' ? 'full-board' : 'orchestrated',
+        consulted,
+        timestamp: new Date(),
+      }
+
+      setMessages((previousMessages) => [...previousMessages, boardMessage])
+      if (consulted.length <= 1) {
+        setExpandedRounds((previousRounds) => new Set(previousRounds).add(boardMessage.id))
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar mensagem')
+    } finally {
+      setLoading(false)
+      setStatusText('')
+      inputRef.current?.focus()
+    }
+  }
+
+  const activeEmployees = employees.filter((employee) => activeRoles.has(employee.role))
+
+  return (
+    <div className="flex h-full max-h-[calc(100vh-8rem)] flex-col">
+      <div className="mb-4 rounded-3xl border border-border/50 bg-[radial-gradient(circle_at_top_left,rgba(79,70,229,0.16),transparent_42%),linear-gradient(180deg,rgba(15,23,42,0.08),transparent)] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                <Sparkles className="mr-1.5 h-3 w-3" />
+                Memoria local ativa
+              </Badge>
+              <Badge variant="outline" className="border-border/60">
+                {activeEmployees.length} participantes
+              </Badge>
+            </div>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              O Chief of Staff agora conduz a conversa e chama apenas os especialistas necessarios.
+              O historico fica salvo localmente e o contexto recente segue para a IA em formato comprimido.
+            </p>
+          </div>
+
+          <Button variant="ghost" size="sm" onClick={resetConversation} className="text-muted-foreground">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Limpar conversa
+          </Button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Bot className="h-3.5 w-3.5" />
+            Modo:
+          </span>
+          <button
+            onClick={() => setResponseMode('orchestrated')}
+            disabled={loading}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+              responseMode === 'orchestrated'
+                ? 'border-primary/40 bg-primary text-primary-foreground'
+                : 'border-border/60 text-muted-foreground hover:border-border'
+            )}
+          >
+            Chief conduz
+          </button>
+          <button
+            onClick={() => setResponseMode('full-board')}
+            disabled={loading}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+              responseMode === 'full-board'
+                ? 'border-primary/40 bg-primary text-primary-foreground'
+                : 'border-border/60 text-muted-foreground hover:border-border'
+            )}
+          >
+            Board completo
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            Participantes:
+          </span>
+          {employees.map((employee) => {
+            const active = activeRoles.has(employee.role)
+            const color = EMPLOYEE_COLORS[employee.role] ?? 'bg-primary'
+
+            return (
+              <button
+                key={employee.role}
+                onClick={() => toggleRole(employee.role)}
+                disabled={loading}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+                  active
+                    ? cn(color, 'border-transparent text-white')
+                    : 'border-border/60 text-muted-foreground hover:border-border'
+                )}
+              >
+                <span>{employee.name}</span>
+                <span className="opacity-70">· {EMPLOYEE_ROLE_LABELS[employee.role]}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden rounded-3xl border border-border/50 bg-background/80 shadow-sm">
+        <ScrollArea className="h-full">
+          <div className="space-y-6 p-5">
+            {messages.length === 0 && (
+              <div className="overflow-hidden rounded-[28px] border border-border/50 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.15),transparent_35%),linear-gradient(180deg,rgba(15,23,42,0.06),transparent)] p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-xl space-y-2">
+                    <p className="text-sm font-semibold text-foreground">Sala do board pronta</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      Fale normalmente. O Chief of Staff organiza a conversa, consulta especialistas
+                      quando necessario e devolve uma resposta unica em vez de uma transcricao caotica.
+                    </p>
+                  </div>
+                  <div className="flex -space-x-2">
+                    {employees.slice(0, 5).map((employee) => (
+                      <Avatar key={employee.role} className="h-11 w-11 border-2 border-background">
+                        <AvatarFallback
+                          className={cn(EMPLOYEE_COLORS[employee.role] ?? 'bg-primary', 'text-xs text-white')}
+                        >
+                          {getInitials(employee.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {messages.map((message) =>
+              message.kind === 'user' ? (
+                <div key={message.id} className="flex justify-end">
+                  <div className="flex max-w-[78%] flex-row-reverse gap-3">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback className="bg-muted text-xs">
+                        <User className="h-3.5 w-3.5" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="rounded-[24px] rounded-tr-sm bg-primary px-4 py-3 text-primary-foreground shadow-sm">
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                      <p className="mt-1 text-right text-xs text-primary-foreground/65">
+                        {message.timestamp.toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div key={message.id} className="flex gap-3">
+                  <Avatar className="mt-1 h-9 w-9 shrink-0">
+                    <AvatarFallback
+                      className={cn(
+                        EMPLOYEE_COLORS[message.leadRole] ?? 'bg-primary',
+                        'text-xs text-white'
+                      )}
+                    >
+                      {getInitials(message.leadName)}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <div className="min-w-0 flex-1 rounded-[28px] border border-border/50 bg-card/80 p-4 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-foreground">{message.leadName}</span>
+                          <Badge variant="outline" className="border-border/60">
+                            {EMPLOYEE_ROLE_LABELS[message.leadRole] ?? message.leadRole}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              message.mode === 'orchestrated'
+                                ? 'border-primary/30 bg-primary/10 text-primary'
+                                : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300'
+                            )}
+                          >
+                            {message.mode === 'orchestrated' ? 'Chief conduz' : 'Board completo'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {message.consulted.length > 0
+                            ? `${message.consulted.length} especialista(s) consultado(s) nesta rodada`
+                            : 'Resposta direta sem consulta adicional'}
+                        </p>
+                      </div>
+
+                      <span className="text-xs text-muted-foreground">
+                        {message.timestamp.toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl bg-muted/50 px-4 py-3">
+                      <ChatRichText content={message.content} />
+                    </div>
+
+                    {message.consulted.length > 0 && (
+                      <div className="mt-4">
+                        <button
+                          onClick={() => toggleRound(message.id)}
+                          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {expandedRounds.has(message.id) ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                          Ver consultas internas
+                        </button>
+
+                        {expandedRounds.has(message.id) && (
+                          <div className="mt-3 space-y-3">
+                            {message.consulted.map((entry) => (
+                              <div
+                                key={`${message.id}-${entry.employeeRole}`}
+                                className="rounded-2xl border border-border/50 bg-background/70 p-3"
+                              >
+                                <div className="mb-2 flex items-center gap-2">
+                                  <Avatar className="h-7 w-7">
+                                    <AvatarFallback
+                                      className={cn(
+                                        EMPLOYEE_COLORS[entry.employeeRole] ?? 'bg-primary',
+                                        'text-[10px] text-white'
+                                      )}
+                                    >
+                                      {getInitials(entry.employeeName)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="text-xs font-semibold text-foreground">{entry.employeeName}</p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {EMPLOYEE_ROLE_LABELS[entry.employeeRole] ?? entry.employeeRole}
+                                    </p>
+                                  </div>
+                                </div>
+                                <ChatRichText content={entry.response} tone="muted" compact />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+
+            {loading && (
+              <div className="flex gap-3">
+                <Avatar className="mt-1 h-9 w-9 shrink-0">
+                  <AvatarFallback className="bg-primary text-xs text-primary-foreground">
+                    <Bot className="h-4 w-4" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1 rounded-[28px] border border-border/50 bg-card/80 p-4 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    {statusText}
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    O historico desta conversa continua sendo levado em conta.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div ref={scrollRef} />
+          </div>
+        </ScrollArea>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <Input
+          ref={inputRef}
+          placeholder={
+            responseMode === 'orchestrated'
+              ? 'Fale com o board. O Chief of Staff coordena a resposta...'
+              : 'Abra a mesa toda para discutir esta pauta...'
+          }
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && sendMessage()}
+          disabled={loading}
+          className="h-12 flex-1 rounded-2xl"
+        />
+        <Button onClick={sendMessage} disabled={loading || !input.trim()} size="icon" className="h-12 w-12 rounded-2xl">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  )
+}
