@@ -2,16 +2,17 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { EmployeeRole } from '@prisma/client'
 
-const DEFAULT_EMPLOYEES = [
-  { role: 'CHIEF_OF_STAFF', name: 'Leo',     personality: 'Proativo, visionário e sempre otimista. Coordena tudo com maestria.' },
-  { role: 'CFO',            name: 'Carlos',  personality: 'Analítico, direto e não aceita desculpas sobre dinheiro.' },
-  { role: 'COO',            name: 'Ana',     personality: 'Disciplinada, focada em resultados e amante de processos.' },
-  { role: 'CHRO',           name: 'Pedro',   personality: 'Empático, atento e sempre lembrando das pessoas que importam.' },
-  { role: 'RD',             name: 'Sofia',   personality: 'Curiosa, criativa e constantemente desafiando limites.' },
-  { role: 'PERSONAL_TRAINER',  name: 'Bruno',   personality: 'Motivador, científico e focado em performance máxima.' },
-  { role: 'MENTOR_ACADEMICO',  name: 'Juliana', personality: 'Metódica, encorajadora e orientada a resultados acadêmicos.' },
-  { role: 'PROJECT_MANAGER',   name: 'Rafael',  personality: 'Sistemático, orientado a entrega e não tolera bloqueios.' },
+const DEFAULT_EMPLOYEES: { role: EmployeeRole; name: string; personality: string }[] = [
+  { role: EmployeeRole.CHIEF_OF_STAFF,   name: 'Leo',     personality: 'Proativo, visionário e sempre otimista. Coordena tudo com maestria.' },
+  { role: EmployeeRole.CFO,              name: 'Carlos',  personality: 'Analítico, direto e não aceita desculpas sobre dinheiro.' },
+  { role: EmployeeRole.COO,              name: 'Ana',     personality: 'Disciplinada, focada em resultados e amante de processos.' },
+  { role: EmployeeRole.CHRO,             name: 'Pedro',   personality: 'Empático, atento e sempre lembrando das pessoas que importam.' },
+  { role: EmployeeRole.RD,               name: 'Sofia',   personality: 'Curiosa, criativa e constantemente desafiando limites.' },
+  { role: EmployeeRole.PERSONAL_TRAINER, name: 'Bruno',   personality: 'Motivador, científico e focado em performance máxima.' },
+  { role: EmployeeRole.MENTOR_ACADEMICO, name: 'Juliana', personality: 'Metódica, encorajadora e orientada a resultados acadêmicos.' },
+  { role: EmployeeRole.PROJECT_MANAGER,  name: 'Rafael',  personality: 'Sistemático, orientado a entrega e não tolera bloqueios.' },
 ]
 
 export async function POST() {
