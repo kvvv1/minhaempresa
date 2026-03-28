@@ -242,7 +242,7 @@ export const ALL_TOOLS = [
   // ── TAREFAS ─────────────────────────────────────────────
   {
     name: 'create_task',
-    description: 'Cria uma nova tarefa para o CEO',
+    description: 'Cria uma tarefa de rotina na aba Rotina do CEO',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -256,7 +256,7 @@ export const ALL_TOOLS = [
   },
   {
     name: 'update_task',
-    description: 'Atualiza status, prioridade ou prazo de uma tarefa',
+    description: 'Atualiza status, prioridade ou prazo de uma tarefa de rotina',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -271,7 +271,7 @@ export const ALL_TOOLS = [
   },
   {
     name: 'delete_task',
-    description: 'Remove uma tarefa',
+    description: 'Remove uma tarefa de rotina',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -548,6 +548,158 @@ export const ALL_TOOLS = [
       required: ['id'],
     },
   },
+  {
+    name: 'create_gtd_task',
+    description: 'Cria uma tarefa GTD na caixa de Tarefas do CEO',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'Titulo da tarefa' },
+        description: { type: 'string', description: 'Descricao opcional' },
+        bucket: {
+          type: 'string',
+          enum: ['INBOX', 'TODAY', 'THIS_WEEK', 'SOMEDAY', 'WAITING', 'REFERENCE'],
+          description: 'Bucket GTD. Padrao: INBOX.',
+        },
+        status: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'], description: 'Prioridade. Padrao: MEDIUM.' },
+        dueDate: { type: 'string', description: 'Prazo ISO 8601' },
+        context: { type: 'string', description: 'Contexto como @trabalho, @casa, @faculdade' },
+        energy: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'], description: 'Energia necessaria' },
+        estimatedMin: { type: 'number', description: 'Estimativa em minutos' },
+        projectRef: { type: 'string', description: 'Referencia livre de projeto' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'update_gtd_task',
+    description: 'Atualiza uma tarefa GTD existente',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'ID da tarefa GTD' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        bucket: { type: 'string', enum: ['INBOX', 'TODAY', 'THIS_WEEK', 'SOMEDAY', 'WAITING', 'REFERENCE'] },
+        status: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+        dueDate: { type: 'string', description: 'Prazo ISO 8601' },
+        context: { type: 'string' },
+        energy: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+        estimatedMin: { type: 'number' },
+        projectRef: { type: 'string' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_gtd_task',
+    description: 'Remove uma tarefa GTD',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'ID da tarefa GTD' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'create_project_task',
+    description: 'Cria uma tarefa de projeto/kanban na area de Trabalho',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'Titulo da tarefa' },
+        description: { type: 'string', description: 'Descricao opcional' },
+        projectId: { type: 'string', description: 'ID do projeto. Opcional.' },
+        projectName: { type: 'string', description: 'Nome do projeto. Opcional; use quando nao souber o ID.' },
+        status: { type: 'string', enum: ['BACKLOG', 'TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'], description: 'Status kanban. Padrao: BACKLOG.' },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'], description: 'Prioridade. Padrao: MEDIUM.' },
+        dueDate: { type: 'string', description: 'Prazo ISO 8601' },
+        estimatedMin: { type: 'number', description: 'Estimativa em minutos' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'update_project_task',
+    description: 'Atualiza uma tarefa de projeto/kanban',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'ID da tarefa de projeto' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        projectId: { type: 'string' },
+        projectName: { type: 'string', description: 'Nome do projeto para localizar o vinculo' },
+        status: { type: 'string', enum: ['BACKLOG', 'TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'] },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+        dueDate: { type: 'string', description: 'Prazo ISO 8601' },
+        estimatedMin: { type: 'number' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_project_task',
+    description: 'Remove uma tarefa de projeto/kanban',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'ID da tarefa de projeto' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'create_assignment',
+    description: 'Cria um trabalho academico na area de Faculdade',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'Titulo do trabalho, prova ou entrega' },
+        description: { type: 'string', description: 'Descricao opcional' },
+        subjectId: { type: 'string', description: 'ID da disciplina. Opcional.' },
+        subjectName: { type: 'string', description: 'Nome da disciplina. Opcional; use quando nao souber o ID.' },
+        dueDate: { type: 'string', description: 'Prazo ISO 8601' },
+        status: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'SUBMITTED', 'GRADED', 'OVERDUE'], description: 'Status. Padrao: PENDING.' },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'], description: 'Prioridade. Padrao: MEDIUM.' },
+        grade: { type: 'number', description: 'Nota, se ja existir' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'update_assignment',
+    description: 'Atualiza um trabalho academico existente',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'ID do trabalho academico' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        subjectId: { type: 'string' },
+        subjectName: { type: 'string', description: 'Nome da disciplina para localizar o vinculo' },
+        dueDate: { type: 'string', description: 'Prazo ISO 8601' },
+        status: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'SUBMITTED', 'GRADED', 'OVERDUE'] },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+        grade: { type: 'number' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_assignment',
+    description: 'Remove um trabalho academico',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'ID do trabalho academico' },
+      },
+      required: ['id'],
+    },
+  },
 ]
 
 // Todos os funcionários têm acesso a TODAS as tools.
@@ -562,6 +714,78 @@ export function getToolsForRole(_role: string) {
 // ============================================================
 
 type ToolInput = Record<string, any>
+
+function hasValue(value: unknown) {
+  return value !== undefined && value !== null && value !== ''
+}
+
+function toNullableNumber(value: unknown) {
+  if (!hasValue(value)) return null
+  const parsed = Number(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function hasOwnKey(input: ToolInput, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key)
+}
+
+function normalizeLookupValue(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+async function resolveProjectId(userId: string, input: ToolInput): Promise<string | null | undefined> {
+  if (hasOwnKey(input, 'projectId')) {
+    return hasValue(input.projectId) ? String(input.projectId) : null
+  }
+
+  if (!hasOwnKey(input, 'projectName')) return undefined
+  if (!hasValue(input.projectName)) return null
+
+  const target = normalizeLookupValue(String(input.projectName))
+  const projects = await prisma.project.findMany({
+    where: { userId },
+    select: { id: true, name: true },
+  })
+
+  const exactMatches = projects.filter((project) => normalizeLookupValue(project.name) === target)
+  if (exactMatches.length === 1) return exactMatches[0].id
+  if (exactMatches.length > 1) throw new Error(`Projeto "${input.projectName}" esta ambiguo. Use o ID do projeto.`)
+
+  const partialMatches = projects.filter((project) => normalizeLookupValue(project.name).includes(target))
+  if (partialMatches.length === 1) return partialMatches[0].id
+  if (partialMatches.length > 1) throw new Error(`Projeto "${input.projectName}" esta ambiguo. Use o ID do projeto.`)
+
+  throw new Error(`Projeto "${input.projectName}" nao foi encontrado.`)
+}
+
+async function resolveSubjectId(userId: string, input: ToolInput): Promise<string | null | undefined> {
+  if (hasOwnKey(input, 'subjectId')) {
+    return hasValue(input.subjectId) ? String(input.subjectId) : null
+  }
+
+  if (!hasOwnKey(input, 'subjectName')) return undefined
+  if (!hasValue(input.subjectName)) return null
+
+  const target = normalizeLookupValue(String(input.subjectName))
+  const subjects = await prisma.subject.findMany({
+    where: { userId },
+    select: { id: true, name: true },
+  })
+
+  const exactMatches = subjects.filter((subject) => normalizeLookupValue(subject.name) === target)
+  if (exactMatches.length === 1) return exactMatches[0].id
+  if (exactMatches.length > 1) throw new Error(`Disciplina "${input.subjectName}" esta ambigua. Use o ID da disciplina.`)
+
+  const partialMatches = subjects.filter((subject) => normalizeLookupValue(subject.name).includes(target))
+  if (partialMatches.length === 1) return partialMatches[0].id
+  if (partialMatches.length > 1) throw new Error(`Disciplina "${input.subjectName}" esta ambigua. Use o ID da disciplina.`)
+
+  throw new Error(`Disciplina "${input.subjectName}" nao foi encontrada.`)
+}
 
 export async function executeTool(toolName: string, input: ToolInput, userId: string): Promise<string> {
   try {
@@ -752,6 +976,117 @@ export async function executeTool(toolName: string, input: ToolInput, userId: st
       case 'delete_task': {
         await prisma.task.delete({ where: { id: input.id } })
         return JSON.stringify({ success: true, message: 'Tarefa removida' })
+      }
+
+      case 'create_gtd_task': {
+        const record = await prisma.gtdTask.create({
+          data: {
+            userId,
+            title: input.title,
+            description: input.description ?? null,
+            bucket: input.bucket ?? 'INBOX',
+            status: input.status ?? 'PENDING',
+            priority: input.priority ?? 'MEDIUM',
+            dueDate: input.dueDate ? new Date(input.dueDate) : null,
+            context: input.context ?? null,
+            energy: input.energy ?? null,
+            estimatedMin: toNullableNumber(input.estimatedMin),
+            projectRef: input.projectRef ?? null,
+          },
+        })
+        return JSON.stringify({ success: true, id: record.id, message: `Tarefa GTD criada: "${input.title}"` })
+      }
+
+      case 'update_gtd_task': {
+        const { id, dueDate, estimatedMin, ...rest } = input
+        await prisma.gtdTask.update({
+          where: { id },
+          data: {
+            ...rest,
+            ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+            ...(estimatedMin !== undefined && { estimatedMin: toNullableNumber(estimatedMin) }),
+          },
+        })
+        return JSON.stringify({ success: true, message: 'Tarefa GTD atualizada' })
+      }
+
+      case 'delete_gtd_task': {
+        await prisma.gtdTask.delete({ where: { id: input.id } })
+        return JSON.stringify({ success: true, message: 'Tarefa GTD removida' })
+      }
+
+      case 'create_project_task': {
+        const projectId = await resolveProjectId(userId, input)
+        const record = await prisma.projectTask.create({
+          data: {
+            userId,
+            title: input.title,
+            description: input.description ?? null,
+            projectId: projectId ?? null,
+            status: input.status ?? 'BACKLOG',
+            priority: input.priority ?? 'MEDIUM',
+            dueDate: input.dueDate ? new Date(input.dueDate) : null,
+            estimatedMin: toNullableNumber(input.estimatedMin),
+          },
+        })
+        return JSON.stringify({ success: true, id: record.id, message: `Tarefa de projeto criada: "${input.title}"` })
+      }
+
+      case 'update_project_task': {
+        const { id, dueDate, estimatedMin, projectId: _projectId, projectName: _projectName, ...rest } = input
+        const projectId = await resolveProjectId(userId, input)
+        await prisma.projectTask.update({
+          where: { id },
+          data: {
+            ...rest,
+            ...(projectId !== undefined && { projectId }),
+            ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+            ...(estimatedMin !== undefined && { estimatedMin: toNullableNumber(estimatedMin) }),
+          },
+        })
+        return JSON.stringify({ success: true, message: 'Tarefa de projeto atualizada' })
+      }
+
+      case 'delete_project_task': {
+        await prisma.projectTask.delete({ where: { id: input.id } })
+        return JSON.stringify({ success: true, message: 'Tarefa de projeto removida' })
+      }
+
+      case 'create_assignment': {
+        const subjectId = await resolveSubjectId(userId, input)
+        const record = await prisma.assignment.create({
+          data: {
+            userId,
+            title: input.title,
+            description: input.description ?? null,
+            subjectId: subjectId ?? null,
+            dueDate: input.dueDate ? new Date(input.dueDate) : null,
+            status: input.status ?? 'PENDING',
+            priority: input.priority ?? 'MEDIUM',
+            grade: toNullableNumber(input.grade),
+          },
+        })
+        return JSON.stringify({ success: true, id: record.id, message: `Trabalho academico criado: "${input.title}"` })
+      }
+
+      case 'update_assignment': {
+        const { id, dueDate, grade, subjectId: _subjectId, subjectName: _subjectName, ...rest } = input
+        const subjectId = await resolveSubjectId(userId, input)
+        await prisma.assignment.update({
+          where: { id },
+          data: {
+            ...rest,
+            ...(subjectId !== undefined && { subjectId }),
+            ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+            ...(grade !== undefined && { grade: toNullableNumber(grade) }),
+          },
+        })
+        return JSON.stringify({ success: true, message: 'Trabalho academico atualizado' })
+      }
+
+      case 'delete_assignment': {
+        await prisma.assignment.delete({ where: { id: input.id } })
+        return JSON.stringify({ success: true, message: 'Trabalho academico removido' })
       }
 
       // ── CONTATOS ──────────────────────────────────────────

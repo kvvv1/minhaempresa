@@ -357,6 +357,7 @@ export async function POST(req: Request) {
           : 'Nenhum especialista adicional foi consultado nesta rodada.',
         'Agora responda ao CEO com uma sintese final unica.',
         'Se a solicitacao exigir uma acao real no sistema e voce tiver ferramentas, execute.',
+        'Ao registrar itens, use a entidade correta: GTD para captura geral, tarefa de projeto para trabalho e trabalho academico para faculdade.',
         'Nunca cite tools, funcoes, parametros, JSON ou bastidores.',
         'Se algo foi executado, confirme apenas o resultado final e o que mudou.',
         'Se nada precisou ser executado, responda como coordenador estrategico do board.',
