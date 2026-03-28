@@ -7,7 +7,19 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const databaseUrl = process.env.DATABASE_URL
+
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required for Prisma.')
+  }
+
+  if (databaseUrl.startsWith('file:')) {
+    throw new Error(
+      'DATABASE_URL must point to PostgreSQL. Use scripts/migrate-to-prod.mjs only for one-time legacy SQLite import.',
+    )
+  }
+
+  const pool = new Pool({ connectionString: databaseUrl })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({
     adapter,

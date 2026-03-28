@@ -9,7 +9,11 @@
     "start": "next start",
     "lint": "eslint .",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "db:validate": "prisma validate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:legacy-import": "node scripts/migrate-to-prod.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

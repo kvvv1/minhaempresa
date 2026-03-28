@@ -104,6 +104,7 @@ interface Contact {
   relationship: string
   email: string | null
   phone: string | null
+  birthday?: string | null
   notes: string | null
   followUpDays: number
   lastContact: string | null
@@ -568,6 +569,7 @@ export default function RelacionamentosPage() {
     relationship: 'Amigo',
     email: '',
     phone: '',
+    birthday: '',
     notes: '',
     followUpDays: '30',
   })
@@ -590,12 +592,12 @@ export default function RelacionamentosPage() {
     const res = await fetch('/api/relacionamentos/contacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, followUpDays: parseInt(form.followUpDays) }),
+      body: JSON.stringify({ ...form, followUpDays: parseInt(form.followUpDays), birthday: form.birthday || null }),
     })
     if (res.ok) {
       toast.success('Contato adicionado!')
       setAddOpen(false)
-      setForm({ name: '', relationship: 'Amigo', email: '', phone: '', notes: '', followUpDays: '30' })
+      setForm({ name: '', relationship: 'Amigo', email: '', phone: '', birthday: '', notes: '', followUpDays: '30' })
       fetchContacts()
     } else {
       toast.error('Erro ao adicionar contato.')
@@ -683,6 +685,10 @@ export default function RelacionamentosPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
+                  <Label>Aniversário</Label>
+                  <Input type="date" value={form.birthday ?? ''} onChange={e => setForm({...form, birthday: e.target.value})} />
+                </div>
+                <div className="space-y-1">
                   <Label>Notas</Label>
                   <Textarea
                     placeholder="Informações importantes sobre este contato..."
@@ -707,6 +713,30 @@ export default function RelacionamentosPage() {
           </Dialog>
         </div>
       </div>
+
+      {/* Upcoming birthdays */}
+      {(() => {
+        const today = new Date()
+        const upcoming = contacts.filter(c => {
+          if (!c.birthday) return false
+          const bday = new Date(c.birthday)
+          const thisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate())
+          const diff = Math.floor((thisYear.getTime() - today.getTime()) / 86400000)
+          return diff >= 0 && diff <= 7
+        })
+        if (upcoming.length === 0) return null
+        return (
+          <div className="p-3 rounded-lg border border-pink-500/30 bg-pink-500/10 text-sm">
+            <span className="font-medium text-pink-400">🎂 Aniversários esta semana: </span>
+            <span className="text-pink-300/80">{upcoming.map(c => {
+              const bday = new Date(c.birthday!)
+              const thisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate())
+              const diff = Math.floor((thisYear.getTime() - today.getTime()) / 86400000)
+              return `${c.name} (${diff === 0 ? 'hoje!' : `em ${diff}d`})`
+            }).join(' • ')}</span>
+          </div>
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
@@ -871,6 +901,10 @@ export default function RelacionamentosPage() {
                           </Badge>
                         )}
                       </div>
+
+                      {contact.birthday && (
+                        <p className="text-xs text-muted-foreground">🎂 {new Date(contact.birthday).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}</p>
+                      )}
 
                       {/* Recent interactions preview */}
                       {contact.interactions && contact.interactions.length > 0 && (

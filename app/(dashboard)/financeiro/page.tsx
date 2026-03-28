@@ -56,7 +56,10 @@ import {
   Send,
   Bot,
   RefreshCw,
+  CheckCircle2,
 } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import { ChatRichText } from '@/components/ai/ChatRichText'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths } from 'date-fns'
@@ -667,6 +670,9 @@ function CFOChatPanel({
 export default function FinanceiroPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
+  const [savingsGoals, setSavingsGoals] = useState<any[]>([])
+  const [savingsOpen, setSavingsOpen] = useState(false)
+  const [savingsForm, setSavingsForm] = useState({ name: '', targetAmount: '', currentAmount: '0', deadline: '', notes: '' })
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('month')
   const [filterType, setFilterType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL')
@@ -697,6 +703,7 @@ export default function FinanceiroPage() {
   useEffect(() => {
     fetchTransactions()
     fetchBudgets()
+    fetch('/api/financeiro/savings-goals').then(r => r.ok ? r.json() : []).then(setSavingsGoals)
   }, [fetchTransactions, fetchBudgets])
 
   // ─── Computed ─────────────────────────────────────────────────────────────
@@ -906,12 +913,27 @@ export default function FinanceiroPage() {
         />
       </div>
 
+      {/* Orçamentos estourados */}
+      {budgets.filter(b => b.transactions.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0) > b.limit).length > 0 && (
+        <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-sm text-red-300/90 flex items-start gap-2">
+          <span className="text-red-400 font-bold">⚠</span>
+          <span>
+            <span className="font-medium text-red-400">Orçamento(s) estourado(s): </span>
+            {budgets
+              .filter(b => b.transactions.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0) > b.limit)
+              .map(b => b.name)
+              .join(', ')}
+          </span>
+        </div>
+      )}
+
       {/* Tabs */}
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="transactions">Transações</TabsTrigger>
           <TabsTrigger value="budgets">Orçamentos</TabsTrigger>
+          <TabsTrigger value="poupanca">Poupança</TabsTrigger>
         </TabsList>
 
         {/* ── Overview ── */}
@@ -1295,6 +1317,102 @@ export default function FinanceiroPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* ── Poupança ── */}
+        <TabsContent value="poupanca" className="space-y-4 mt-4">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setSavingsOpen(true)}><Plus className="w-4 h-4 mr-2" />Nova Meta</Button>
+          </div>
+          {savingsGoals.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <p className="text-sm">Nenhuma meta de poupança ainda</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              {savingsGoals.map(goal => {
+                const pct = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0
+                const remaining = goal.targetAmount - goal.currentAmount
+                return (
+                  <Card key={goal.id} className={goal.achieved ? 'border-emerald-500/40' : ''}>
+                    <CardContent className="pt-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{goal.achieved ? '✅ ' : ''}{goal.name}</p>
+                          {goal.deadline && <p className="text-xs text-muted-foreground">Prazo: {new Date(goal.deadline).toLocaleDateString('pt-BR')}</p>}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="w-7 h-7" onClick={async () => {
+                            await fetch(`/api/financeiro/savings-goals/${goal.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ achieved: !goal.achieved }) })
+                            fetch('/api/financeiro/savings-goals').then(r => r.ok ? r.json() : []).then(setSavingsGoals)
+                          }}>
+                            <CheckCircle2 className={cn('w-4 h-4', goal.achieved ? 'text-emerald-400' : 'text-muted-foreground')} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive" onClick={async () => {
+                            await fetch(`/api/financeiro/savings-goals/${goal.id}`, { method: 'DELETE' })
+                            setSavingsGoals(prev => prev.filter(g => g.id !== goal.id))
+                          }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span>{formatCurrency(goal.currentAmount)} de {formatCurrency(goal.targetAmount)}</span>
+                          <span className={pct >= 100 ? 'text-emerald-400' : 'text-muted-foreground'}>{pct}%</span>
+                        </div>
+                        <Progress value={pct} className="h-2" />
+                        {remaining > 0 && <p className="text-xs text-muted-foreground">Falta {formatCurrency(remaining)}</p>}
+                      </div>
+                      {goal.notes && <p className="text-xs text-muted-foreground italic">{goal.notes}</p>}
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Adicionar valor"
+                          className="h-7 text-xs"
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              if (!val) return
+                              await fetch(`/api/financeiro/savings-goals/${goal.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ currentAmount: goal.currentAmount + val }) })
+                              fetch('/api/financeiro/savings-goals').then(r => r.ok ? r.json() : []).then(setSavingsGoals)
+                              ;(e.target as HTMLInputElement).value = ''
+                            }
+                          }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+
+          <Dialog open={savingsOpen} onOpenChange={setSavingsOpen}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Nova Meta de Poupança</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1"><Label>Nome</Label><Input placeholder="Ex: Viagem Europa" value={savingsForm.name} onChange={e => setSavingsForm({...savingsForm, name: e.target.value})} /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1"><Label>Meta (R$)</Label><Input type="number" value={savingsForm.targetAmount} onChange={e => setSavingsForm({...savingsForm, targetAmount: e.target.value})} /></div>
+                  <div className="space-y-1"><Label>Já tenho (R$)</Label><Input type="number" value={savingsForm.currentAmount} onChange={e => setSavingsForm({...savingsForm, currentAmount: e.target.value})} /></div>
+                </div>
+                <div className="space-y-1"><Label>Prazo</Label><Input type="date" value={savingsForm.deadline} onChange={e => setSavingsForm({...savingsForm, deadline: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Observações</Label><Textarea value={savingsForm.notes} onChange={e => setSavingsForm({...savingsForm, notes: e.target.value})} rows={2} /></div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setSavingsOpen(false)}>Cancelar</Button>
+                  <Button className="flex-1" onClick={async () => {
+                    if (!savingsForm.name || !savingsForm.targetAmount) return
+                    await fetch('/api/financeiro/savings-goals', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(savingsForm) })
+                    fetch('/api/financeiro/savings-goals').then(r => r.ok ? r.json() : []).then(setSavingsGoals)
+                    setSavingsOpen(false)
+                    setSavingsForm({ name: '', targetAmount: '', currentAmount: '0', deadline: '', notes: '' })
+                  }}>Criar Meta</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

@@ -283,7 +283,7 @@ function BookCard({ book, onUpdate, onDelete }: { book: Book; onUpdate: () => vo
               <StarRating value={book.rating} readonly />
             )}
             {book.notes && (
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{book.notes}</p>
+              <p className="text-xs text-muted-foreground mt-1 italic line-clamp-2">"{book.notes.slice(0, 80)}{book.notes.length > 80 ? '...' : ''}"</p>
             )}
           </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -323,12 +323,12 @@ function BookCard({ book, onUpdate, onDelete }: { book: Book; onUpdate: () => vo
                       </div>
                     )}
                     <div className="space-y-1">
-                      <Label>Notas</Label>
+                      <Label>Anotações / Destaques</Label>
                       <Textarea
-                        placeholder="Suas anotações sobre o livro..."
-                        value={form.notes}
+                        placeholder="Principais insights, citações, ideias do livro..."
+                        value={form.notes ?? ''}
                         onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
-                        rows={3}
+                        rows={4}
                       />
                     </div>
                     <Button type="submit" className="w-full">Salvar</Button>

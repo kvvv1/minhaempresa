@@ -473,6 +473,37 @@ export default function TrabalhoPage() {
               </CardContent>
             </Card>
           )}
+          {(() => {
+            const tasksWithEstimate = tasks.filter(t => t.estimatedMin)
+            if (tasksWithEstimate.length === 0) return null
+            return (
+              <Card className="mb-4">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> Estimativa vs. Real
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {tasksWithEstimate.slice(0, 5).map(task => {
+                    const actual = timeEntries.filter(e => e.projectTask?.id === task.id).reduce((s, e) => s + (e.durationMin ?? 0), 0)
+                    const pct = task.estimatedMin! > 0 ? Math.round((actual / task.estimatedMin!) * 100) : 0
+                    const over = actual > task.estimatedMin!
+                    return (
+                      <div key={task.id} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="truncate font-medium max-w-[60%]">{task.title}</span>
+                          <span className={cn(over ? 'text-red-400' : 'text-emerald-400')}>
+                            {actual}min / {task.estimatedMin}min estimado
+                          </span>
+                        </div>
+                        <Progress value={Math.min(100, pct)} className="h-1.5" />
+                      </div>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+            )
+          })()}
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted-foreground">Últimos 7 dias</p>
             {timeEntries.length === 0 ? (

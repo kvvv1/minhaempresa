@@ -468,6 +468,7 @@ export default function RotinaPage() {
   const [addHabitOpen, setAddHabitOpen] = useState(false)
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [showAllTasks, setShowAllTasks] = useState(false)
+  const [heatmapData, setHeatmapData] = useState<Record<string, number>>({})
   const [habitForm, setHabitForm] = useState({ name: '', description: '', frequency: 'DAILY' })
   const [taskForm, setTaskForm] = useState({
     title: '',
@@ -492,6 +493,9 @@ export default function RotinaPage() {
 
   useEffect(() => { fetchHabits() }, [fetchHabits])
   useEffect(() => { fetchTasks() }, [fetchTasks])
+  useEffect(() => {
+    fetch('/api/rotina/heatmap').then(r => r.ok ? r.json() : {}).then(d => setHeatmapData(d))
+  }, [])
 
   // ── Habit actions
 
@@ -595,6 +599,65 @@ export default function RotinaPage() {
 
   const pendingTasks = tasks.filter(t => t.status === 'PENDING' || t.status === 'IN_PROGRESS')
   const urgentTasks = pendingTasks.filter(t => t.priority === 'URGENT' || t.priority === 'HIGH')
+
+  function HabitHeatmap({ data }: { data: Record<string, number> }) {
+    const today = new Date()
+    const days: { date: string; count: number }[] = []
+    for (let i = 364; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      days.push({ date: key, count: data[key] ?? 0 })
+    }
+    // pad to start on Monday
+    const firstDay = new Date(days[0].date)
+    const startPad = (firstDay.getDay() + 6) % 7
+    const padded = [...Array(startPad).fill(null), ...days]
+    const weeks: (typeof days[0] | null)[][] = []
+    for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7))
+
+    function cellColor(count: number) {
+      if (count === 0) return 'bg-muted/40'
+      if (count === 1) return 'bg-emerald-900/60'
+      if (count === 2) return 'bg-emerald-700/70'
+      if (count <= 4) return 'bg-emerald-500/80'
+      return 'bg-emerald-400'
+    }
+
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-muted-foreground">Consistência — último ano</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <div className="flex gap-0.5 min-w-max">
+              {weeks.map((week, wi) => (
+                <div key={wi} className="flex flex-col gap-0.5">
+                  {week.map((day, di) => (
+                    <div
+                      key={di}
+                      title={day ? `${day.date}: ${day.count} hábito(s)` : ''}
+                      className={cn('w-3 h-3 rounded-sm', day ? cellColor(day.count) : 'bg-transparent')}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+            <span>Menos</span>
+            <div className="flex gap-0.5">
+              {['bg-muted/40','bg-emerald-900/60','bg-emerald-700/70','bg-emerald-500/80','bg-emerald-400'].map((c,i) => (
+                <div key={i} className={cn('w-3 h-3 rounded-sm', c)} />
+              ))}
+            </div>
+            <span>Mais</span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6 pb-10">
@@ -792,6 +855,8 @@ export default function RotinaPage() {
           </CardContent>
         </Card>
       </div>
+
+      <HabitHeatmap data={heatmapData} />
 
       {/* Productivity bar */}
       {dailyHabits.length > 0 && (

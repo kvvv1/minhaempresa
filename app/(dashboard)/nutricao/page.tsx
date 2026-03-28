@@ -39,6 +39,7 @@ const MACRO_COLORS = { calories: '#f59e0b', proteinG: '#6366f1', carbsG: '#10b98
 
 export default function NutricaoPage() {
   const [trainer, setTrainer] = useState<{ name: string } | null>(null)
+  const [hydration, setHydration] = useState<{ mlTotal: number; goalMl: number } | null>(null)
   const [todayMeals, setTodayMeals] = useState<Meal[]>([])
   const [historyMeals, setHistoryMeals] = useState<Meal[]>([])
   const [plans, setPlans] = useState<MealPlan[]>([])
@@ -66,6 +67,7 @@ export default function NutricaoPage() {
     if (sumRes.ok) setSummary(await sumRes.json())
     if (todayRes.ok) setTodayMeals(await todayRes.json())
     if (plansRes.ok) setPlans(await plansRes.json())
+    fetch('/api/saude/hydration').then(r => r.ok ? r.json() : null).then(d => setHydration(d))
   }, [today])
 
   const fetchHistory = useCallback(async (date: string) => {
@@ -206,6 +208,22 @@ export default function NutricaoPage() {
 
         {/* Hoje */}
         <TabsContent value="hoje" className="mt-6 space-y-4">
+          {hydration && (
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    💧 Hidratação
+                  </p>
+                  <span className={cn('text-sm font-bold', hydration.mlTotal >= hydration.goalMl ? 'text-emerald-400' : 'text-blue-400')}>
+                    {hydration.mlTotal}ml / {hydration.goalMl}ml
+                  </span>
+                </div>
+                <Progress value={Math.min(100, Math.round((hydration.mlTotal / hydration.goalMl) * 100))} className="h-2" />
+                <p className="text-xs text-muted-foreground mt-1">{Math.min(100, Math.round((hydration.mlTotal / hydration.goalMl) * 100))}% da meta diária</p>
+              </CardContent>
+            </Card>
+          )}
           {Object.keys(groupedMeals).length === 0 ? (
             <div className="text-center py-12 text-muted-foreground"><Utensils className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhuma refeição registrada hoje</p></div>
           ) : (

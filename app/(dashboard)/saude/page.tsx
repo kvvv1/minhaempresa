@@ -32,6 +32,7 @@ export default function SaudePage() {
   const [hydration, setHydration] = useState<HydrationLog | null>(null)
   const [summary, setSummary] = useState<{ lastWorkoutDaysAgo: number | null; avgSleepMin: number | null; todayHydrationPct: number }>({ lastWorkoutDaysAgo: null, avgSleepMin: null, todayHydrationPct: 0 })
 
+  const [prs, setPrs] = useState<{name: string; maxLoadKg: number; maxReps: number; date: string}[]>([])
   const [trainer, setTrainer] = useState<{ name: string } | null>(null)
   const [workoutOpen, setWorkoutOpen] = useState(false)
   const [metricOpen, setMetricOpen] = useState(false)
@@ -55,6 +56,7 @@ export default function SaudePage() {
     if (sRes.ok) setSleepLogs(await sRes.json())
     if (hRes.ok) setHydration(await hRes.json())
     if (sumRes.ok) setSummary(await sumRes.json())
+    fetch('/api/saude/prs').then(r => r.ok ? r.json() : []).then(setPrs)
   }, [])
 
   useEffect(() => {
@@ -242,6 +244,28 @@ export default function SaudePage() {
 
         {/* Treinos */}
         <TabsContent value="treinos" className="mt-6 space-y-3">
+          {prs.length > 0 && (
+            <Card className="mb-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  🏆 Recordes Pessoais
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {prs.slice(0, 6).map(pr => (
+                    <div key={pr.name} className="p-2 rounded-lg bg-muted/30 border border-border/40">
+                      <p className="text-xs font-medium truncate">{pr.name}</p>
+                      <p className="text-sm font-bold text-amber-400">
+                        {pr.maxLoadKg > 0 ? `${pr.maxLoadKg}kg` : ''}{pr.maxLoadKg > 0 && pr.maxReps > 0 ? ' × ' : ''}{pr.maxReps > 0 ? `${pr.maxReps} reps` : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{new Date(pr.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {workouts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground"><Dumbbell className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum treino este mês</p></div>
           ) : workouts.map((w) => (

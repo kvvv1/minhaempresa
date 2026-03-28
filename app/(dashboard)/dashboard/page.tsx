@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -18,6 +16,8 @@ import Link from 'next/link'
 import { CrisisAlert } from '@/components/crisis/CrisisAlert'
 import { ChatButton } from '@/components/ai/ChatButton'
 import { ChatRichText } from '@/components/ai/ChatRichText'
+import { PlannerSummaryCards, PlannerTodayBoard } from '@/components/planner/PlannerViews'
+import type { PlannerResponse } from '@/lib/planner'
 
 const moduleCards = [
   { name: 'Financeiro',      href: '/financeiro',    icon: TrendingUp,    key: 'financeiro',    color: 'text-blue-400' },
@@ -34,18 +34,19 @@ const moduleCards = [
 ]
 
 export default function DashboardPage() {
-  const { data: session } = useSession()
   const [briefing, setBriefing] = useState('')
   const [loadingBriefing, setLoadingBriefing] = useState(true)
   const [valuation, setValuation] = useState<any>(null)
   const [stats, setStats] = useState<any>(null)
   const [loadingValuation, setLoadingValuation] = useState(false)
   const [chiefOfStaff, setChiefOfStaff] = useState<{ name: string } | null>(null)
+  const [plannerToday, setPlannerToday] = useState<PlannerResponse | null>(null)
 
   useEffect(() => {
     fetchBriefing()
     fetchValuation()
     fetchStats()
+    fetchPlannerToday()
     fetch('/api/employees?role=CHIEF_OF_STAFF').then(r => r.ok ? r.json() : null).then(d => { if (d?.[0]) setChiefOfStaff(d[0]) })
   }, [])
 
@@ -64,6 +65,13 @@ export default function DashboardPage() {
     if (res.ok) {
       const data = await res.json()
       if (data.length > 0) setValuation(data[0])
+    }
+  }
+
+  async function fetchPlannerToday() {
+    const res = await fetch('/api/planner?scope=today')
+    if (res.ok) {
+      setPlannerToday(await res.json())
     }
   }
 
@@ -160,6 +168,48 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Meu Dia</h2>
+            <p className="text-sm text-muted-foreground">Agenda, foco e pendencias conectadas entre os modulos.</p>
+          </div>
+          <Link href="/tarefas">
+            <Button variant="outline" size="sm">
+              Abrir Central Operacional
+            </Button>
+          </Link>
+        </div>
+
+        {plannerToday ? (
+          <>
+            <PlannerSummaryCards summary={plannerToday.summary} />
+            <PlannerTodayBoard data={plannerToday} />
+          </>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
 
       {/* Valuation + Scores */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

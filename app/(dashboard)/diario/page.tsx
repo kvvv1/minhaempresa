@@ -62,6 +62,13 @@ function getMoodConfig(mood: number) {
   return MOOD_CONFIG[Math.min(Math.max(mood - 1, 0), 9)]
 }
 
+const DIARY_TEMPLATES = [
+  { id: 'livre', label: '📝 Livre', text: '' },
+  { id: 'revisao', label: '🎯 Revisão do Dia', text: '**O que foi bem hoje?**\n\n\n**O que posso melhorar?**\n\n\n**Top 3 prioridades de amanhã:**\n1. \n2. \n3. ' },
+  { id: 'gratidao', label: '🙏 Gratidão', text: '**3 coisas pelas quais sou grato hoje:**\n1. \n2. \n3. \n\n**Uma pessoa que impactou meu dia:**\n\n\n**Como posso retribuir?**\n' },
+  { id: 'semanal', label: '📊 Revisão Semanal', text: '**Conquistas da semana:**\n\n\n**Lições aprendidas:**\n\n\n**O que abandonar / manter / começar:**\n- Abandonar: \n- Manter: \n- Começar: \n\n**Meta principal da próxima semana:**\n' },
+]
+
 function wordCount(text: string) {
   return text.trim() ? text.trim().split(/\s+/).length : 0
 }
@@ -71,6 +78,7 @@ export default function DiarioPage() {
   const [loading, setLoading] = useState(true)
   const [chiefOfStaff, setChiefOfStaff] = useState<{ name: string } | null>(null)
   const [content, setContent] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [mood, setMood] = useState(5)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
@@ -441,6 +449,25 @@ export default function DiarioPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Template selector */}
+                <div className="flex gap-1.5 flex-wrap mb-3">
+                  {DIARY_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      onClick={() => {
+                        setSelectedTemplate(template.id)
+                        setContent(template.text)
+                      }}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        selectedTemplate === template.id
+                          ? 'bg-primary/15 text-primary border-primary/30'
+                          : 'bg-muted/40 text-muted-foreground border-border/40'
+                      }`}
+                    >
+                      {template.label}
+                    </button>
+                  ))}
+                </div>
                 <Textarea
                   placeholder="O que aconteceu hoje? O que aprendi? O que quero melhorar? Quais foram os momentos mais significativos?"
                   value={content}

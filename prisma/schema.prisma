@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -52,6 +53,8 @@ model User {
   timeEntries      TimeEntry[]
   gtdTasks         GtdTask[]
   savingsGoals     SavingsGoal[]
+  calendarEvents    CalendarEvent[]
+  savedConversations SavedConversation[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -749,4 +752,36 @@ model SavingsGoal {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// ─── Calendário ───────────────────────────────────────────────────────────────
+
+model CalendarEvent {
+  id              String    @id @default(cuid())
+  userId          String
+  title           String
+  description     String?
+  startAt         DateTime
+  endAt           DateTime?
+  allDay          Boolean   @default(false)
+  color           String    @default("#6366f1")
+  reminderMinutes Int?
+  module          String?
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ─── Conversas Salvas ─────────────────────────────────────────────────────────
+
+model SavedConversation {
+  id           String   @id @default(cuid())
+  userId       String
+  employeeName String
+  employeeRole String
+  title        String
+  messages     String   // JSON array of {role, content, createdAt}
+  tags         String   @default("[]") // JSON array of strings
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
 }

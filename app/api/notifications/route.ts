@@ -29,3 +29,25 @@ export async function PATCH(req: Request) {
 
   return NextResponse.json({ success: true })
 }
+
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const data = await req.json()
+    const notification = await prisma.notification.create({
+      data: {
+        userId: session.user.id,
+        title: data.title,
+        message: data.message,
+        type: data.type ?? 'INFO',
+        module: data.module ?? null,
+        actionUrl: data.actionUrl ?? null,
+      },
+    })
+    return NextResponse.json(notification)
+  } catch {
+    return NextResponse.json({ error: 'Erro ao criar notificação' }, { status: 500 })
+  }
+}

@@ -7,9 +7,16 @@ Aplicacao Next.js para gerenciar a vida como uma empresa pessoal, com dashboard,
 - Next.js 16
 - React 19
 - Prisma 7
-- SQLite local
+- PostgreSQL em desenvolvimento e producao
 - NextAuth com credenciais
 - Tailwind CSS 4
+
+## Banco de dados
+
+- O projeto usa PostgreSQL como fonte unica de verdade.
+- O Prisma CLI carrega `.env` e `.env.local`, com `.env.local` tendo prioridade.
+- `DATABASE_URL` deve apontar para PostgreSQL. URLs `file:` nao sao mais suportadas no runtime.
+- `dev.db` continua apenas como legado para importacao unica via `npm run db:legacy-import`.
 
 ## Rodando localmente
 
@@ -19,37 +26,60 @@ Aplicacao Next.js para gerenciar a vida como uma empresa pessoal, com dashboard,
 npm install
 ```
 
-2. Gere o client Prisma:
+2. Suba o PostgreSQL local:
+
+```bash
+docker compose up -d postgres
+```
+
+3. Ajuste `.env.local` se precisar mudar host, porta ou credenciais.
+
+4. Gere o client Prisma:
 
 ```bash
 npm run db:generate
 ```
 
-3. Crie ou atualize o banco SQLite local:
+5. Aplique as migracoes locais:
 
 ```bash
-npm run db:push
+npm run db:migrate -- --name init
 ```
 
-4. Inicie o projeto:
+6. Inicie o projeto:
 
 ```bash
 npm run dev
 ```
 
-## Variaveis de ambiente
+## Migrando dados legados do SQLite
 
-O projeto usa `.env.local` com estes valores base:
+Se voce ainda precisa reaproveitar o `dev.db`, importe os dados para o PostgreSQL atual:
+
+```bash
+npm run db:legacy-import
+```
+
+Variaveis opcionais:
 
 ```env
-DATABASE_URL="file:./dev.db"
+SOURCE_SQLITE_PATH="./dev.db"
+TARGET_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vida_sa?schema=public"
+```
+
+Quando `TARGET_DATABASE_URL` nao for definido, o script usa `DATABASE_URL`.
+
+## Variaveis de ambiente
+
+Exemplo base para desenvolvimento local:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vida_sa?schema=public"
 NEXTAUTH_SECRET="change-this-to-a-random-secret-string"
 NEXTAUTH_URL="http://localhost:3000"
 ANTHROPIC_API_KEY="your-anthropic-api-key"
 RESEND_API_KEY="your-resend-api-key"
 ```
-
-Sem `ANTHROPIC_API_KEY`, as rotas de IA nao vao responder corretamente.
 
 ## Scripts
 
@@ -58,12 +88,15 @@ npm run dev
 npm run build
 npm run lint
 npm run db:generate
+npm run db:validate
+npm run db:migrate
+npm run db:deploy
 npm run db:push
+npm run db:legacy-import
 ```
 
 ## Estado atual
 
-- Build de producao esta passando
-- Lint esta passando sem erros
-- Banco local usa SQLite
-- `proxy.ts` substitui o antigo `middleware.ts` para o contrato do Next 16
+- Build de producao deve usar PostgreSQL
+- Prisma local e runtime usam a mesma `DATABASE_URL`
+- SQLite ficou restrito ao fluxo de importacao legada

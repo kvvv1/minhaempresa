@@ -311,6 +311,18 @@ export default function FaculdadePage() {
                             <Badge variant="outline" className="text-xs text-muted-foreground">Meta: {s.targetGrade}</Badge>
                           )}
                         </div>
+                        {s.targetGrade && s.currentGrade !== null && s.currentGrade !== undefined && s.grades.length > 0 && (() => {
+                          const totalWeight = s.grades.reduce((sum, g) => sum + g.weight, 0)
+                          const currentTotal = s.grades.reduce((sum, g) => sum + g.grade * g.weight, 0)
+                          const remainingWeight = 1 // assume next assessment has weight 1
+                          const needed = (s.targetGrade * (totalWeight + remainingWeight) - currentTotal) / remainingWeight
+                          if (needed <= 0 || needed > 10) return null
+                          return (
+                            <p className={cn('text-xs mt-1', needed > 7 ? 'text-orange-400' : 'text-emerald-400')}>
+                              Precisa de {needed.toFixed(1)} na próxima avaliação para atingir meta
+                            </p>
+                          )
+                        })()}
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setGradeOpen(s.id)}>+ Nota</Button>

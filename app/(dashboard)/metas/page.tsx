@@ -64,6 +64,7 @@ interface Goal {
   targetDate: string | null
   quarter: number | null
   year: number | null
+  updatedAt: string
   keyResults: KeyResult[]
 }
 
@@ -425,6 +426,7 @@ export default function MetasPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
+  const [showHistory, setShowHistory] = useState<boolean>(false)
   const [filterCategory, setFilterCategory] = useState<string>('ALL')
   const [filterStatus, setFilterStatus] = useState<string>('ALL')
   const [chiefOfStaff, setChiefOfStaff] = useState<{ name: string } | null>(null)
@@ -756,6 +758,46 @@ export default function MetasPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Conquistas — Histórico de metas concluídas */}
+      {goals.filter(g => g.status === 'COMPLETED').length > 0 && (
+        <div className="border-t border-border/40 pt-4 mt-2">
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className="flex items-center gap-2 w-full text-left group"
+          >
+            <Trophy className="w-4 h-4 text-green-400 shrink-0" />
+            <span className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+              🏆 Conquistas ({goals.filter(g => g.status === 'COMPLETED').length})
+            </span>
+            <span className="ml-auto text-muted-foreground">
+              {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </span>
+          </button>
+
+          {showHistory && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {goals
+                .filter(g => g.status === 'COMPLETED')
+                .map(g => {
+                  const colors = CATEGORY_COLORS[g.category] || CATEGORY_COLORS.PERSONAL
+                  return (
+                    <div
+                      key={g.id}
+                      className="flex items-center gap-2 bg-muted/30 rounded-full px-3 py-1.5 border border-border/40"
+                    >
+                      <span className={cn('w-2 h-2 rounded-full shrink-0', colors.bar)} />
+                      <span className="text-xs font-medium truncate max-w-[180px]">{g.title}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(g.updatedAt).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
         </div>
       )}
     </div>
