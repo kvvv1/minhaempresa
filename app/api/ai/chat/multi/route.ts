@@ -3,12 +3,23 @@ import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { chatWithEmployee, runEmployeeAgent } from '@/lib/claude'
+import { runEmployeeAgent, MODEL_HAIKU } from '@/lib/claude'
 import { getToolsForRole, executeTool } from '@/lib/tools'
 import { EMPLOYEE_ROLE_LABELS } from '@/lib/utils'
 
 const MAX_CONTEXT_MESSAGES = 60
 const MAX_SPECIALISTS = 2
+
+const ROLE_DATA_SECTIONS: Record<string, string[]> = {
+  CFO:              ['financeiro'],
+  COO:              ['rotina', 'metas'],
+  CHRO:             ['relacionamentos'],
+  RD:               ['desenvolvimento'],
+  PERSONAL_TRAINER: ['saude', 'nutricao'],
+  MENTOR_ACADEMICO: ['faculdade'],
+  PROJECT_MANAGER:  ['trabalho', 'tarefas'],
+  CHIEF_OF_STAFF:   ['financeiro', 'metas', 'rotina', 'relacionamentos', 'desenvolvimento', 'diario', 'saude', 'nutricao', 'faculdade', 'trabalho', 'tarefas'],
+}
 const ROLE_PRIORITY = [
   'CHIEF_OF_STAFF',
   'CFO',
@@ -266,54 +277,89 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nao foi possivel organizar o board' }, { status: 500 })
     }
 
-    // Busca dados reais do usuário para contextualizar a IA
+    // Determina quais seções de dados são necessárias para os participantes desta rodada
+    const neededSections = new Set<string>()
+    for (const role of [lead.role, ...panel.map((e) => e.role)]) {
+      for (const section of ROLE_DATA_SECTIONS[role] ?? ROLE_DATA_SECTIONS['CHIEF_OF_STAFF']) {
+        neededSections.add(section)
+      }
+    }
+
+    // Busca apenas as seções necessárias
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-    const [
-      transactions, budgets, goals, habits, habitLogs, tasks,
-      contacts, interactions, books, courses, skills,
-      diaryEntries, workouts, sleepLogs, meals,
-      subjects, assignments, projects, projectTasks, gtdTasks,
-    ] = await Promise.all([
-      prisma.transaction.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 50 }),
-      prisma.budget.findMany({ where: { userId } }),
-      prisma.goal.findMany({ where: { userId }, include: { keyResults: true } }),
-      prisma.habit.findMany({ where: { userId, isActive: true } }),
-      prisma.habitLog.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
-      prisma.task.findMany({ where: { userId } }),
-      prisma.contact.findMany({ where: { userId } }),
-      prisma.interaction.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 20 }),
-      prisma.book.findMany({ where: { userId } }),
-      prisma.course.findMany({ where: { userId } }),
-      prisma.skill.findMany({ where: { userId } }),
-      prisma.diaryEntry.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 10 }),
-      prisma.workout.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 10 }),
-      prisma.sleepLog.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 7 }),
-      prisma.meal.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
-      prisma.subject.findMany({ where: { userId } }),
-      prisma.assignment.findMany({ where: { userId } }),
-      prisma.project.findMany({ where: { userId } }),
-      prisma.projectTask.findMany({ where: { userId } }),
-      prisma.gtdTask.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' }, take: 30 }),
-    ])
+    const queryMap: Record<string, Promise<unknown>> = {}
+    if (neededSections.has('financeiro')) {
+      queryMap.transactions = prisma.transaction.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 30 })
+      queryMap.budgets = prisma.budget.findMany({ where: { userId } })
+    }
+    if (neededSections.has('metas')) {
+      queryMap.goals = prisma.goal.findMany({ where: { userId }, include: { keyResults: true }, take: 20 })
+    }
+    if (neededSections.has('rotina')) {
+      queryMap.habits = prisma.habit.findMany({ where: { userId, isActive: true }, take: 30 })
+      queryMap.habitLogs = prisma.habitLog.findMany({ where: { userId, date: { gte: sevenDaysAgo } } })
+      queryMap.tasks = prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 30 })
+    }
+    if (neededSections.has('relacionamentos')) {
+      queryMap.contacts = prisma.contact.findMany({ where: { userId }, take: 30 })
+      queryMap.interactions = prisma.interaction.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 20 })
+    }
+    if (neededSections.has('desenvolvimento')) {
+      queryMap.books = prisma.book.findMany({ where: { userId }, take: 20 })
+      queryMap.courses = prisma.course.findMany({ where: { userId }, take: 20 })
+      queryMap.skills = prisma.skill.findMany({ where: { userId }, take: 20 })
+    }
+    if (neededSections.has('diario')) {
+      queryMap.diaryEntries = prisma.diaryEntry.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 10 })
+    }
+    if (neededSections.has('saude')) {
+      queryMap.workouts = prisma.workout.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 10 })
+      queryMap.sleepLogs = prisma.sleepLog.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 7 })
+    }
+    if (neededSections.has('nutricao')) {
+      queryMap.meals = prisma.meal.findMany({ where: { userId, date: { gte: sevenDaysAgo } } })
+    }
+    if (neededSections.has('faculdade')) {
+      queryMap.subjects = prisma.subject.findMany({ where: { userId }, take: 20 })
+      queryMap.assignments = prisma.assignment.findMany({ where: { userId }, orderBy: { dueDate: 'asc' }, take: 20 })
+    }
+    if (neededSections.has('trabalho')) {
+      queryMap.projects = prisma.project.findMany({ where: { userId }, take: 20 })
+      queryMap.projectTasks = prisma.projectTask.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 30 })
+    }
+    if (neededSections.has('tarefas')) {
+      queryMap.gtdTasks = prisma.gtdTask.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' }, take: 30 })
+    }
 
-    const income = transactions.filter((t) => t.type === 'INCOME' && new Date(t.date) >= monthStart).reduce((s, t) => s + t.amount, 0)
-    const expenses = transactions.filter((t) => t.type === 'EXPENSE' && new Date(t.date) >= monthStart).reduce((s, t) => s + t.amount, 0)
+    const queryKeys = Object.keys(queryMap)
+    const queryResults = await Promise.all(Object.values(queryMap))
+    const raw = Object.fromEntries(queryKeys.map((k, i) => [k, queryResults[i]])) as Record<string, any>
 
-    const userData = {
-      financeiro: { transactions: transactions.slice(0, 20), budgets, income, expenses, balance: income - expenses },
-      metas: goals,
-      rotina: { habits, habitLogs, tasks },
-      relacionamentos: { contacts, interactions },
-      desenvolvimento: { books, courses, skills },
-      diario: diaryEntries,
-      saude: { workouts, sleepLogs },
-      nutricao: { meals },
-      faculdade: { subjects, assignments },
-      trabalho: { projects, projectTasks },
-      tarefas: gtdTasks,
+    // Monta o objeto completo de dados (apenas seções buscadas)
+    const transactions = raw.transactions ?? []
+    const income = transactions.filter((t: any) => t.type === 'INCOME' && new Date(t.date) >= monthStart).reduce((s: number, t: any) => s + t.amount, 0)
+    const expenses = transactions.filter((t: any) => t.type === 'EXPENSE' && new Date(t.date) >= monthStart).reduce((s: number, t: any) => s + t.amount, 0)
+
+    const allSectionsData: Record<string, unknown> = {}
+    if (neededSections.has('financeiro')) allSectionsData.financeiro = { transactions: transactions.slice(0, 20), budgets: raw.budgets ?? [], income, expenses, balance: income - expenses }
+    if (neededSections.has('metas')) allSectionsData.metas = raw.goals ?? []
+    if (neededSections.has('rotina')) allSectionsData.rotina = { habits: raw.habits ?? [], habitLogs: raw.habitLogs ?? [], tasks: raw.tasks ?? [] }
+    if (neededSections.has('relacionamentos')) allSectionsData.relacionamentos = { contacts: raw.contacts ?? [], interactions: raw.interactions ?? [] }
+    if (neededSections.has('desenvolvimento')) allSectionsData.desenvolvimento = { books: raw.books ?? [], courses: raw.courses ?? [], skills: raw.skills ?? [] }
+    if (neededSections.has('diario')) allSectionsData.diario = raw.diaryEntries ?? []
+    if (neededSections.has('saude')) allSectionsData.saude = { workouts: raw.workouts ?? [], sleepLogs: raw.sleepLogs ?? [] }
+    if (neededSections.has('nutricao')) allSectionsData.nutricao = { meals: raw.meals ?? [] }
+    if (neededSections.has('faculdade')) allSectionsData.faculdade = { subjects: raw.subjects ?? [], assignments: raw.assignments ?? [] }
+    if (neededSections.has('trabalho')) allSectionsData.trabalho = { projects: raw.projects ?? [], projectTasks: raw.projectTasks ?? [] }
+    if (neededSections.has('tarefas')) allSectionsData.tarefas = raw.gtdTasks ?? []
+
+    // Retorna apenas as seções relevantes para o role
+    function dataForRole(role: string) {
+      const keys = ROLE_DATA_SECTIONS[role] ?? ROLE_DATA_SECTIONS['CHIEF_OF_STAFF']
+      return Object.fromEntries(keys.filter((k) => k in allSectionsData).map((k) => [k, allSectionsData[k]]))
     }
 
     const consulted = await Promise.all(
@@ -333,7 +379,10 @@ export async function POST(req: Request) {
           ].join('\n')
         )
 
-        const response = await chatWithEmployee(employee as any, userData, specialistHistory)
+        const response = await runEmployeeAgent(employee as any, dataForRole(employee.role), specialistHistory, {
+          model: MODEL_HAIKU,
+          maxTokens: 512,
+        })
 
         return {
           employeeRole: employee.role,
@@ -371,7 +420,7 @@ export async function POST(req: Request) {
       ].join('\n\n')
     )
 
-    const leadResponse = await runEmployeeAgent(lead as any, userData, leadHistory, {
+    const leadResponse = await runEmployeeAgent(lead as any, dataForRole(lead.role), leadHistory, {
       tools: getToolsForRole(lead.role),
       maxIterations: 10,
       maxTokens: 2048,
@@ -387,7 +436,8 @@ export async function POST(req: Request) {
       },
       consulted: consulted.filter((entry) => entry.response.length > 0),
     })
-  } catch {
+  } catch (err) {
+    console.error('[multi/route] erro no chat do board:', err)
     return NextResponse.json({ error: 'Erro no chat do board' }, { status: 500 })
   }
 }

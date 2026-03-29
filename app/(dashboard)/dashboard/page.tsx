@@ -29,7 +29,6 @@ import type { DashboardPayload, DashboardValuation } from '@/lib/dashboard'
 const moduleCards = [
   { name: 'Financeiro',      href: '/financeiro',    icon: TrendingUp,    key: 'financeiro',    color: 'text-blue-400' },
   { name: 'Metas',           href: '/metas',         icon: Target,        key: 'metas',         color: 'text-emerald-400' },
-  { name: 'Rotina',          href: '/rotina',        icon: Calendar,      key: 'rotina',        color: 'text-purple-400' },
   { name: 'Relacionamentos', href: '/relacionamentos',icon: Users,        key: 'relacionamentos',color: 'text-pink-400' },
   { name: 'Desenvolvimento', href: '/desenvolvimento',icon: BookOpen,     key: 'desenvolvimento',color: 'text-amber-400' },
   { name: 'Diário CEO',      href: '/diario',        icon: BookMarked,    key: 'diario',        color: 'text-slate-400' },
@@ -37,7 +36,7 @@ const moduleCards = [
   { name: 'Nutrição',        href: '/nutricao',      icon: Salad,         key: 'nutricao',      color: 'text-lime-400' },
   { name: 'Faculdade',       href: '/faculdade',     icon: GraduationCap, key: 'faculdade',     color: 'text-violet-400' },
   { name: 'Trabalho',        href: '/trabalho',      icon: Briefcase,     key: 'trabalho',      color: 'text-orange-400' },
-  { name: 'Tarefas',         href: '/tarefas',       icon: ListTodo,      key: 'tarefas',       color: 'text-sky-400' },
+  { name: 'Central',         href: '/tarefas',       icon: ListTodo,      key: 'tarefas',       color: 'text-sky-400' },
 ]
 
 type DashboardPlannerView = PlannerScope | 'agenda'
@@ -52,7 +51,6 @@ const operationalModuleFilters: { value: DashboardPlannerModuleFilter; label: st
   { value: 'saude', label: 'Saude', icon: Activity },
   { value: 'nutricao', label: 'Nutricao', icon: Salad },
   { value: 'metas', label: 'Metas', icon: Target },
-  { value: 'calendario', label: 'Calendario', icon: Calendar },
 ]
 
 function getPlannerScopeForView(view: DashboardPlannerView): PlannerScope {

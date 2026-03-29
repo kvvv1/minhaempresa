@@ -211,15 +211,15 @@ export function getSuggestedGtdBucketForDate(date: Date, now = new Date()) {
   return null
 }
 
-export const PLANNER_MODULE_CONFIG: Record<PlannerModule, { label: string; className: string }> = {
-  tarefas: { label: 'Tarefas', className: 'border-sky-500/30 text-sky-300' },
-  rotina: { label: 'Rotina', className: 'border-violet-500/30 text-violet-300' },
-  trabalho: { label: 'Trabalho', className: 'border-orange-500/30 text-orange-300' },
-  faculdade: { label: 'Faculdade', className: 'border-emerald-500/30 text-emerald-300' },
-  saude: { label: 'Saude', className: 'border-rose-500/30 text-rose-300' },
-  nutricao: { label: 'Nutricao', className: 'border-lime-500/30 text-lime-300' },
-  metas: { label: 'Metas', className: 'border-cyan-500/30 text-cyan-300' },
-  calendario: { label: 'Calendario', className: 'border-amber-500/30 text-amber-300' },
+export const PLANNER_MODULE_CONFIG: Record<PlannerModule, { label: string; className: string; chipCn: string }> = {
+  tarefas:    { label: 'Tarefas',    className: 'border-sky-500/30 text-sky-300',       chipCn: 'bg-sky-500/20 text-sky-200 border-sky-500/40' },
+  rotina:     { label: 'Rotina',     className: 'border-violet-500/30 text-violet-300', chipCn: 'bg-violet-500/20 text-violet-200 border-violet-500/40' },
+  trabalho:   { label: 'Trabalho',   className: 'border-orange-500/30 text-orange-300', chipCn: 'bg-orange-500/20 text-orange-200 border-orange-500/40' },
+  faculdade:  { label: 'Faculdade',  className: 'border-emerald-500/30 text-emerald-300', chipCn: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40' },
+  saude:      { label: 'Saude',      className: 'border-rose-500/30 text-rose-300',     chipCn: 'bg-rose-500/20 text-rose-200 border-rose-500/40' },
+  nutricao:   { label: 'Nutricao',   className: 'border-lime-500/30 text-lime-300',     chipCn: 'bg-lime-500/20 text-lime-200 border-lime-500/40' },
+  metas:      { label: 'Metas',      className: 'border-cyan-500/30 text-cyan-300',     chipCn: 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40' },
+  calendario: { label: 'Calendario', className: 'border-amber-500/30 text-amber-300',   chipCn: 'bg-amber-500/20 text-amber-200 border-amber-500/40' },
 }
 
 export const PLANNER_PRIORITY_CONFIG: Record<PlannerPriority, { label: string; className: string }> = {

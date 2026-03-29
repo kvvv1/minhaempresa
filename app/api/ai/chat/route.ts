@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { runEmployeeAgent } from '@/lib/claude'
+import { streamEmployeeAgent } from '@/lib/claude'
 import { getToolsForRole, executeTool } from '@/lib/tools'
 
 const chatSchema = z.object({
@@ -30,8 +30,6 @@ const chatSchema = z.object({
   moduleData: z.unknown().optional(),
 })
 
-const MAX_ITERATIONS = 10
-
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return new Response('Unauthorized', { status: 401 })
@@ -47,44 +45,19 @@ export async function POST(req: Request) {
   })
   if (!employee) return new Response('Funcionario nao encontrado', { status: 404 })
 
-  const finalText = await runEmployeeAgent(
+  const stream = streamEmployeeAgent(
     { name: employee.name, role: employee.role as any, personality: employee.personality },
     moduleData ?? null,
     messages,
     {
       tools: getToolsForRole(employeeRole),
-      maxIterations: MAX_ITERATIONS,
+      maxIterations: 3,
       maxTokens: 2048,
       executeTool: (toolName, input) => executeTool(toolName, input, userId),
     }
   )
 
-  if (finalText) {
-    const readable = new ReadableStream({
-      start(controller) {
-        const encoder = new TextEncoder()
-        const words = finalText.split(' ')
-        let index = 0
-
-        const interval = setInterval(() => {
-          if (index < words.length) {
-            controller.enqueue(encoder.encode((index === 0 ? '' : ' ') + words[index]))
-            index++
-            return
-          }
-
-          clearInterval(interval)
-          controller.close()
-        }, 15)
-      },
-    })
-
-    return new Response(readable, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Accel-Buffering': 'no' },
-    })
-  }
-
-  return new Response('Nao consegui processar sua solicitacao. Tente novamente.', {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Accel-Buffering': 'no' },
   })
 }

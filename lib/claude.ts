@@ -4,8 +4,15 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+export const MODEL_SONNET = 'claude-sonnet-4-6'
+export const MODEL_HAIKU = 'claude-haiku-4-5-20251001'
+
 const EMPTY_RESPONSE_FALLBACK =
   'Não consegui formular uma resposta útil agora. Tente reformular sua pergunta.'
+
+function buildCachedSystem(text: string): Anthropic.TextBlockParam[] {
+  return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }]
+}
 
 type EmployeeChatMessage = {
   role: 'user' | 'assistant'
@@ -24,6 +31,7 @@ interface EmployeeAgentOptions {
   maxIterations?: number
   maxTokens?: number
   tools?: Anthropic.Tool[]
+  model?: string
 }
 
 export type EmployeeRole = 'CFO' | 'COO' | 'CHRO' | 'RD' | 'CHIEF_OF_STAFF' | 'PERSONAL_TRAINER' | 'MENTOR_ACADEMICO' | 'PROJECT_MANAGER'
@@ -139,7 +147,7 @@ FORMATO DE RESPOSTA:
   return `${roleDescriptions[employee.role]}
 
 DADOS ATUAIS DO CEO:
-${JSON.stringify(userData, null, 2)}
+${JSON.stringify(userData)}
 ${operationsSection}
 ${formattingSection}
 
@@ -197,76 +205,43 @@ function getUserVisibleToolResult(rawResult: string) {
   return parseToolResult(rawResult).message
 }
 
-export async function runEmployeeAgent(
-  employee: Employee,
-  userData: any,
-  messages: EmployeeChatMessage[],
-  options: EmployeeAgentOptions = {}
-): Promise<string> {
-  const systemPrompt = getEmployeeSystemPrompt(employee, userData, {
-    canUseTools: Boolean(options.tools?.length && options.executeTool),
-  })
-
-  if (!options.tools?.length || !options.executeTool) {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: options.maxTokens ?? 1024,
-      system: systemPrompt,
-      messages: messages.map((message) => {
-        if (message.imageData && message.role === 'user') {
-          return {
-            role: 'user' as const,
-            content: [
-              {
-                type: 'image' as const,
-                source: {
-                  type: 'base64' as const,
-                  media_type: (message.imageMimeType ?? 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                  data: message.imageData,
-                },
-              },
-              { type: 'text' as const, text: message.content || 'Analise esta imagem.' },
-            ],
-          }
-        }
-        return { role: message.role, content: message.content }
-      }),
-    })
-
-    return getTextFromContent(response.content) || EMPTY_RESPONSE_FALLBACK
-  }
-
-  const loopMessages: Anthropic.MessageParam[] = messages.map((message) => {
-    if (message.imageData && message.role === 'user') {
-      return {
-        role: 'user',
-        content: [
-          {
-            type: 'image' as const,
-            source: {
-              type: 'base64' as const,
-              media_type: (message.imageMimeType ?? 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-              data: message.imageData,
-            },
+function mapMessage(message: EmployeeChatMessage): Anthropic.MessageParam {
+  if (message.imageData && message.role === 'user') {
+    return {
+      role: 'user',
+      content: [
+        {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: (message.imageMimeType ?? 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: message.imageData,
           },
-          { type: 'text' as const, text: message.content || 'Analise esta imagem.' },
-        ],
-      }
+        },
+        { type: 'text' as const, text: message.content || 'Analise esta imagem.' },
+      ],
     }
-    return { role: message.role, content: message.content }
-  })
+  }
+  return { role: message.role, content: message.content }
+}
 
+async function runToolLoop(
+  loopMessages: Anthropic.MessageParam[],
+  systemWithCache: Anthropic.TextBlockParam[],
+  model: string,
+  options: EmployeeAgentOptions
+): Promise<{ finalText: string; lastToolSummary: string }> {
   let finalText = ''
   let lastToolSummary = ''
   let iterations = 0
 
-  while (iterations < (options.maxIterations ?? 10)) {
+  while (iterations < (options.maxIterations ?? 3)) {
     iterations++
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model,
       max_tokens: options.maxTokens ?? 2048,
-      system: systemPrompt,
+      system: systemWithCache,
       tools: options.tools,
       messages: loopMessages,
     })
@@ -285,15 +260,8 @@ export async function runEmployeeAgent(
 
     const toolResults = await Promise.all(
       toolUseBlocks.map(async (block) => {
-        const rawResult = await options.executeTool?.(
-          block.name,
-          block.input as Record<string, unknown>
-        )
-
-        if (rawResult) {
-          lastToolSummary = getUserVisibleToolResult(rawResult)
-        }
-
+        const rawResult = await options.executeTool?.(block.name, block.input as Record<string, unknown>)
+        if (rawResult) lastToolSummary = getUserVisibleToolResult(rawResult)
         return {
           type: 'tool_result' as const,
           tool_use_id: block.id,
@@ -305,7 +273,123 @@ export async function runEmployeeAgent(
     loopMessages.push({ role: 'user', content: toolResults })
   }
 
-  return finalText || lastToolSummary || EMPTY_RESPONSE_FALLBACK
+  return { finalText: finalText || lastToolSummary || EMPTY_RESPONSE_FALLBACK, lastToolSummary }
+}
+
+export async function runEmployeeAgent(
+  employee: Employee,
+  userData: any,
+  messages: EmployeeChatMessage[],
+  options: EmployeeAgentOptions = {}
+): Promise<string> {
+  const model = options.model ?? MODEL_SONNET
+  const systemPrompt = getEmployeeSystemPrompt(employee, userData, {
+    canUseTools: Boolean(options.tools?.length && options.executeTool),
+  })
+  const systemWithCache = buildCachedSystem(systemPrompt)
+
+  if (!options.tools?.length || !options.executeTool) {
+    const response = await client.messages.create({
+      model,
+      max_tokens: options.maxTokens ?? 1024,
+      system: systemWithCache,
+      messages: messages.map(mapMessage),
+    })
+    return getTextFromContent(response.content) || EMPTY_RESPONSE_FALLBACK
+  }
+
+  const loopMessages = messages.map(mapMessage)
+  const { finalText } = await runToolLoop(loopMessages, systemWithCache, model, options)
+  return finalText
+}
+
+export function streamEmployeeAgent(
+  employee: Employee,
+  userData: any,
+  messages: EmployeeChatMessage[],
+  options: EmployeeAgentOptions = {}
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  const model = options.model ?? MODEL_SONNET
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        const systemPrompt = getEmployeeSystemPrompt(employee, userData, {
+          canUseTools: Boolean(options.tools?.length && options.executeTool),
+        })
+        const systemWithCache = buildCachedSystem(systemPrompt)
+        const loopMessages = messages.map(mapMessage)
+        let lastToolSummary = ''
+        let iterations = 0
+        const maxIter = options.maxIterations ?? 3
+
+        while (iterations < maxIter) {
+          iterations++
+
+          const stream = client.messages.stream({
+            model,
+            max_tokens: options.maxTokens ?? 2048,
+            system: systemWithCache,
+            ...(options.tools?.length ? { tools: options.tools } : {}),
+            messages: loopMessages,
+          })
+
+          // Detecta tool_use o mais cedo possível para não emitir texto de preamble
+          let toolUseDetected = false
+          const textChunks: string[] = []
+
+          for await (const event of stream) {
+            if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+              toolUseDetected = true
+            }
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+              textChunks.push(event.delta.text)
+              if (!toolUseDetected) {
+                // Streaming real: emite token a token enquanto Claude gera
+                controller.enqueue(encoder.encode(event.delta.text))
+              }
+            }
+          }
+
+          const finalMsg = await stream.finalMessage()
+          const toolUseBlocks = finalMsg.content.filter(
+            (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+          )
+
+          if (toolUseBlocks.length === 0) {
+            // Resposta final — texto já foi emitido token a token acima
+            // Se não houve texto (ex: só tool_use antes mas agora resolveu), emite fallback
+            if (textChunks.length === 0) {
+              controller.enqueue(encoder.encode(lastToolSummary || EMPTY_RESPONSE_FALLBACK))
+            }
+            break
+          }
+
+          // Ainda há tools — executa e continua o loop
+          loopMessages.push({ role: 'assistant', content: finalMsg.content })
+
+          const toolResults = await Promise.all(
+            toolUseBlocks.map(async (block) => {
+              const rawResult = await options.executeTool?.(block.name, block.input as Record<string, unknown>)
+              if (rawResult) lastToolSummary = getUserVisibleToolResult(rawResult)
+              return {
+                type: 'tool_result' as const,
+                tool_use_id: block.id,
+                content: getModelVisibleToolResult(rawResult ?? ''),
+              }
+            })
+          )
+
+          loopMessages.push({ role: 'user', content: toolResults })
+        }
+      } catch (err) {
+        console.error('[streamEmployeeAgent]', err)
+      } finally {
+        controller.close()
+      }
+    },
+  })
 }
 
 export async function chatWithEmployee(
