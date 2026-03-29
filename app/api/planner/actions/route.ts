@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { syncPlannerItemsFromOrigin } from '@/lib/planner-persistence'
 import { applyPlannerOriginAction, canPlannerSourceMutate, getPlannerWritableSource, setPlannerOriginCompletion } from '@/lib/planner-origin'
 
 type PlannerQuickAction = 'move-to-today' | 'move-to-week' | 'defer' | 'complete' | 'reopen'
@@ -42,6 +43,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Origem nao encontrada' }, { status: 404 })
       }
 
+      const refreshedSource = await getPlannerWritableSource(source.sourceType, source.id, session.user.id)
+      if (refreshedSource) {
+        await syncPlannerItemsFromOrigin({
+          userId: session.user.id,
+          source: refreshedSource,
+        })
+      }
+
       return NextResponse.json(updated)
     }
 
@@ -54,6 +63,14 @@ export async function POST(req: Request) {
 
     if (!updated) {
       return NextResponse.json({ error: 'Origem nao encontrada' }, { status: 404 })
+    }
+
+    const refreshedSource = await getPlannerWritableSource(source.sourceType, source.id, session.user.id)
+    if (refreshedSource) {
+      await syncPlannerItemsFromOrigin({
+        userId: session.user.id,
+        source: refreshedSource,
+      })
     }
 
     return NextResponse.json(updated)

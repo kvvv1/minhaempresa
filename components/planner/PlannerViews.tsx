@@ -92,6 +92,14 @@ function PlannerItemCard({ item, compact = false, actions }: { item: PlannerItem
   const priorityConfig = item.priority ? PLANNER_PRIORITY_CONFIG[item.priority] : null
   const primaryDate = getPrimaryDate(item)
   const overdue = isPlannerItemOverdue(item)
+  const ownershipLabel =
+    item.ownership === 'planner'
+      ? 'Planner'
+      : item.ownership === 'calendar'
+        ? 'Calendario'
+        : item.ownership === 'origin'
+          ? 'Origem'
+          : null
   const content = (
     <div
       className={cn(
@@ -129,6 +137,8 @@ function PlannerItemCard({ item, compact = false, actions }: { item: PlannerItem
         {item.scheduleMode === 'manual' ? <span className="text-amber-400">Bloco manual</span> : null}
         {priorityConfig && <span className={priorityConfig.className}>{priorityConfig.label}</span>}
         {item.estimatedMin ? <span>{item.estimatedMin} min</span> : null}
+        {ownershipLabel ? <span>{ownershipLabel}</span> : null}
+        {item.persisted ? <span className="text-emerald-400">Persistido</span> : null}
         {overdue ? <span className="text-red-400">Atrasada</span> : null}
       </div>
     </div>

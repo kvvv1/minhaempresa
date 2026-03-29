@@ -61,6 +61,92 @@ interface GtdTask {
   createdAt: string
 }
 
+interface PlannerWeeklyReview {
+  period: {
+    start: string
+    end: string
+    label: string
+  }
+  metrics: {
+    inboxCount: number
+    waitingCount: number
+    somedayCount: number
+    overdueCount: number
+    scheduledHours: number
+    conflictCount: number
+    manualBlocks: number
+    plannedItems: number
+    overloadedDays: number
+    lowBufferDays: number
+  }
+  topPriorities: Array<{
+    title: string
+    priority: string | null
+    dueDate: string | null
+    sourceModule: string
+  }>
+  nextActions: string[]
+  suggestions: Array<{
+    id: string
+    title: string
+    sourceType: PlannerSourceType
+    sourceModule: string
+    priority: string | null
+    estimatedMin: number
+    suggestedStart: string
+    suggestedEnd: string
+    score: number
+    fitLabel: string
+    impact: string
+    rationale: string
+  }>
+  rebalances: Array<{
+    eventId: string
+    title: string
+    sourceModule: string
+    priority: string | null
+    fromStart: string
+    fromEnd: string
+    suggestedStart: string
+    suggestedEnd: string
+    impact: string
+    rationale: string
+  }>
+  conflicts: Array<{
+    eventId: string
+    title: string
+    sourceModule: string
+    priority: string | null
+    blockingTitle: string
+    currentStart: string
+    currentEnd: string
+    suggestedStart: string
+    suggestedEnd: string
+    impact: string
+    rationale: string
+  }>
+  workload: {
+    status: 'balanced' | 'medium' | 'high'
+    message: string
+  }
+  capacity: Array<{
+    date: string
+    label: string
+    plannedHours: number
+    meetingHours: number
+    calendarHours: number
+    remainingFocusHours: number
+    conflictCount: number
+    status: 'open' | 'busy' | 'overloaded'
+  }>
+  timeline: Array<{
+    date: string
+    label: string
+    plannedItems: number
+    plannedHours: number
+  }>
+}
+
 const BUCKET_CONFIG: Record<GtdBucket, { label: string; icon: React.ElementType; color: string }> = {
   INBOX: { label: 'Inbox', icon: Inbox, color: 'text-slate-400' },
   TODAY: { label: 'Hoje', icon: Calendar, color: 'text-red-400' },
@@ -168,6 +254,12 @@ export default function TarefasPage() {
   const [processDialogTask, setProcessDialogTask] = useState<GtdTask | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewData, setReviewData] = useState<PlannerWeeklyReview | null>(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [syncingPlanner, setSyncingPlanner] = useState(false)
+  const [schedulingSuggestionId, setSchedulingSuggestionId] = useState<string | null>(null)
+  const [rebalancingEventId, setRebalancingEventId] = useState<string | null>(null)
+  const [resolvingConflictEventId, setResolvingConflictEventId] = useState<string | null>(null)
   const [plannerLoading, setPlannerLoading] = useState(true)
   const [todayPlanner, setTodayPlanner] = useState<PlannerResponse | null>(null)
   const [weekPlanner, setWeekPlanner] = useState<PlannerResponse | null>(null)
@@ -250,6 +342,125 @@ export default function TarefasPage() {
 
   function openManualBlockDialog() {
     setScheduleForm(getManualBlockForm())
+  }
+
+  async function handlePlannerSync() {
+    try {
+      setSyncingPlanner(true)
+      const res = await fetch('/api/planner/sync', { method: 'POST' })
+      if (!res.ok) throw new Error()
+
+      const data = await res.json()
+      toast.success(`Planner sincronizado: ${data.syncedEvents} blocos e ${data.syncedOrigins} origens revisadas.`)
+      fetchPlannerData()
+    } catch {
+      toast.error('Erro ao sincronizar planner')
+    } finally {
+      setSyncingPlanner(false)
+    }
+  }
+
+  async function openWeeklyReview() {
+    try {
+      setReviewOpen(true)
+      setReviewLoading(true)
+      const res = await fetch('/api/planner/review')
+      if (!res.ok) throw new Error()
+
+      setReviewData(await res.json())
+    } catch {
+      toast.error('Erro ao carregar revisao semanal')
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  async function handleScheduleSuggestion(suggestion: PlannerWeeklyReview['suggestions'][number]) {
+    try {
+      setSchedulingSuggestionId(suggestion.id)
+      const res = await fetch('/api/planner/blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: suggestion.title,
+          description: null,
+          allDay: false,
+          scheduledStart: suggestion.suggestedStart,
+          scheduledEnd: suggestion.suggestedEnd,
+          sourceId: suggestion.id,
+          sourceType: suggestion.sourceType,
+          sourceModule: suggestion.sourceModule,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Erro ao agendar sugestao')
+      }
+
+      toast.success('Sugestao agendada no planner.')
+      await Promise.all([refreshTaskSurfaces(), openWeeklyReview()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao agendar sugestao')
+    } finally {
+      setSchedulingSuggestionId(null)
+    }
+  }
+
+  async function handleApplyRebalance(rebalance: PlannerWeeklyReview['rebalances'][number]) {
+    try {
+      setRebalancingEventId(rebalance.eventId)
+      const res = await fetch(`/api/planner/blocks/${rebalance.eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: rebalance.title,
+          allDay: false,
+          scheduledStart: rebalance.suggestedStart,
+          scheduledEnd: rebalance.suggestedEnd,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Erro ao redistribuir bloco')
+      }
+
+      toast.success('Bloco redistribuido no planner.')
+      await Promise.all([refreshTaskSurfaces(), openWeeklyReview()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao redistribuir bloco')
+    } finally {
+      setRebalancingEventId(null)
+    }
+  }
+
+  async function handleResolveConflict(conflict: PlannerWeeklyReview['conflicts'][number]) {
+    try {
+      setResolvingConflictEventId(conflict.eventId)
+      const res = await fetch(`/api/planner/blocks/${conflict.eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: conflict.title,
+          allDay: false,
+          scheduledStart: conflict.suggestedStart,
+          scheduledEnd: conflict.suggestedEnd,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Erro ao resolver conflito')
+      }
+
+      toast.success('Conflito resolvido no planner.')
+      await Promise.all([refreshTaskSurfaces(), openWeeklyReview()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao resolver conflito')
+    } finally {
+      setResolvingConflictEventId(null)
+    }
   }
 
   function openScheduleDialog(item: PlannerItem) {
@@ -465,7 +676,10 @@ export default function TarefasPage() {
         </div>
         <div className="flex items-center gap-2">
           {pm && <ChatButton employeeRole="PROJECT_MANAGER" employeeName={pm.name} moduleData={{ tasks, bucketCounts, plannerToday: todayPlanner?.summary }} />}
-          <Button variant="outline" size="sm" onClick={() => setReviewOpen(true)}>
+          <Button variant="outline" size="sm" onClick={handlePlannerSync} disabled={syncingPlanner}>
+            {syncingPlanner ? 'Sincronizando...' : 'Sincronizar planner'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={openWeeklyReview}>
             Revisao Semanal
           </Button>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -565,6 +779,35 @@ export default function TarefasPage() {
         ) : plannerData ? (
           <>
             <PlannerSummaryCards summary={plannerData.summary} />
+
+            {plannerData.insights.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {plannerData.insights.map((insight) => (
+                  <Card
+                    key={insight.id}
+                    className={cn(
+                      insight.level === 'alert'
+                        ? 'border-red-500/30 bg-red-500/10'
+                        : insight.level === 'warning'
+                          ? 'border-amber-500/30 bg-amber-500/10'
+                          : 'border-sky-500/30 bg-sky-500/10'
+                    )}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-sm">{insight.title}</CardTitle>
+                        <Badge variant="outline" className="capitalize">
+                          {insight.level}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">{insight.message}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : null}
 
             <Tabs value={plannerView} onValueChange={(value) => setPlannerView(value as PlannerView)}>
               <TabsList className="flex h-auto flex-wrap gap-1">
@@ -773,29 +1016,249 @@ export default function TarefasPage() {
           <DialogHeader>
             <DialogTitle>Revisao Semanal GTD</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 text-sm">
-            <div className="space-y-2 rounded-lg bg-muted/30 p-3">
-              <p className="font-medium">1. Inbox ({bucketCounts.INBOX ?? 0} itens)</p>
-              <p className="text-xs text-muted-foreground">Processe cada item: delete, delegue, faca agora ou mova para o bucket correto.</p>
-              {(bucketCounts.INBOX ?? 0) === 0 ? <p className="text-xs text-emerald-400">Inbox limpo.</p> : null}
+          {reviewLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-28 w-full" />
             </div>
-            <div className="space-y-2 rounded-lg bg-muted/30 p-3">
-              <p className="font-medium">2. Esta Semana ({bucketCounts.THIS_WEEK ?? 0} itens)</p>
-              <p className="text-xs text-muted-foreground">Revise se ainda fazem sentido. Rebaixe ou delete o que perdeu contexto.</p>
+          ) : reviewData ? (
+            <div className="space-y-4 text-sm">
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">Semana {reviewData.period.label}</p>
+                    <p className="text-xs text-muted-foreground">{reviewData.workload.message}</p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      reviewData.workload.status === 'high'
+                        ? 'border-red-500/40 text-red-400'
+                        : reviewData.workload.status === 'medium'
+                          ? 'border-amber-500/40 text-amber-400'
+                          : 'border-emerald-500/40 text-emerald-400'
+                    )}
+                  >
+                    {reviewData.workload.status}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Inbox</p>
+                  <p className="text-lg font-semibold">{reviewData.metrics.inboxCount}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Vencidas</p>
+                  <p className="text-lg font-semibold">{reviewData.metrics.overdueCount}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Horas planejadas</p>
+                  <p className="text-lg font-semibold">{reviewData.metrics.scheduledHours}h</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Conflitos</p>
+                  <p className="text-lg font-semibold">{reviewData.metrics.conflictCount}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Dias sobrecarregados</p>
+                  <p className="text-lg font-semibold">{reviewData.metrics.overloadedDays}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Dias sem buffer</p>
+                  <p className="text-lg font-semibold">{reviewData.metrics.lowBufferDays}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-lg bg-muted/30 p-3">
+                <p className="font-medium">Proximas acoes</p>
+                {reviewData.nextActions.length > 0 ? (
+                  <div className="space-y-2">
+                    {reviewData.nextActions.map((action, index) => (
+                      <p key={index} className="text-xs text-muted-foreground">{index + 1}. {action}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-emerald-400">Sem alertas criticos nesta revisao.</p>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-lg bg-muted/30 p-3">
+                <p className="font-medium">Top prioridades abertas</p>
+                {reviewData.topPriorities.length > 0 ? (
+                  <div className="space-y-2">
+                    {reviewData.topPriorities.map((item, index) => (
+                      <div key={`${item.sourceModule}-${item.title}-${index}`} className="flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{item.title}</p>
+                          <p className="text-muted-foreground">{item.sourceModule}</p>
+                        </div>
+                        <div className="text-right">
+                          <p>{item.priority ?? 'SEM'}</p>
+                          <p className="text-muted-foreground">{item.dueDate ? new Date(item.dueDate).toLocaleDateString('pt-BR') : 'sem prazo'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Nenhuma prioridade aberta encontrada.</p>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+                <p className="font-medium text-sky-300">Sugestoes de horario</p>
+                {reviewData.suggestions.length > 0 ? (
+                  <div className="space-y-2">
+                    {reviewData.suggestions.map((suggestion, index) => (
+                      <div key={`${suggestion.title}-${index}`} className="rounded-lg bg-background/40 p-2 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">{suggestion.title}</p>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{suggestion.priority ?? 'SEM'}</Badge>
+                            <Badge variant="outline" className="border-sky-500/40 text-sky-200">
+                              {suggestion.fitLabel}
+                            </Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={schedulingSuggestionId === suggestion.id}
+                              onClick={() => handleScheduleSuggestion(suggestion)}
+                            >
+                              {schedulingSuggestionId === suggestion.id ? 'Agendando...' : 'Agendar'}
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          {new Date(suggestion.suggestedStart).toLocaleString('pt-BR')} - {new Date(suggestion.suggestedEnd).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="mt-1 text-muted-foreground">{suggestion.sourceModule} · {suggestion.estimatedMin} min · score {suggestion.score}</p>
+                        <p className="mt-1 text-[11px] uppercase tracking-wide text-sky-200/80">{suggestion.impact}</p>
+                        <p className="mt-1 text-sky-100/80">{suggestion.rationale}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Nenhuma sugestao automatica disponivel agora.</p>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="font-medium text-amber-300">Capacidade diaria</p>
+                <div className="space-y-2">
+                  {reviewData.capacity.map((day) => (
+                    <div key={day.date} className="rounded-lg bg-background/40 p-2 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium">{day.label}</p>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            day.status === 'overloaded'
+                              ? 'border-red-500/40 text-red-400'
+                              : day.status === 'busy'
+                                ? 'border-amber-500/40 text-amber-300'
+                                : 'border-emerald-500/40 text-emerald-300'
+                          )}
+                        >
+                          {day.status === 'overloaded' ? 'sobrecarregado' : day.status === 'busy' ? 'carregado' : 'aberto'}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        Planner {day.plannedHours}h · Reunioes {day.meetingHours}h · Calendario {day.calendarHours}h
+                      </p>
+                      <p className="mt-1 text-muted-foreground">
+                        Foco livre {day.remainingFocusHours}h {day.conflictCount > 0 ? `· ${day.conflictCount} conflito(s)` : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3">
+                <p className="font-medium text-rose-300">Redistribuir carga</p>
+                {reviewData.rebalances.length > 0 ? (
+                  <div className="space-y-2">
+                    {reviewData.rebalances.map((rebalance) => (
+                      <div key={`${rebalance.eventId}-${rebalance.suggestedStart}`} className="rounded-lg bg-background/40 p-2 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{rebalance.title}</p>
+                            <p className="text-muted-foreground">{rebalance.sourceModule}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{rebalance.priority ?? 'SEM'}</Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={rebalancingEventId === rebalance.eventId}
+                              onClick={() => handleApplyRebalance(rebalance)}
+                            >
+                              {rebalancingEventId === rebalance.eventId ? 'Movendo...' : 'Aplicar'}
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          Atual {new Date(rebalance.fromStart).toLocaleString('pt-BR')} - {new Date(rebalance.fromEnd).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="mt-1 text-muted-foreground">
+                          Sugerido {new Date(rebalance.suggestedStart).toLocaleString('pt-BR')} - {new Date(rebalance.suggestedEnd).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="mt-1 text-[11px] uppercase tracking-wide text-rose-200/80">{rebalance.impact}</p>
+                        <p className="mt-1 text-rose-100/80">{rebalance.rationale}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Nenhuma redistribuicao sugerida para esta semana.</p>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                <p className="font-medium text-red-300">Resolver conflitos</p>
+                {reviewData.conflicts.length > 0 ? (
+                  <div className="space-y-2">
+                    {reviewData.conflicts.map((conflict) => (
+                      <div key={`${conflict.eventId}-${conflict.suggestedStart}`} className="rounded-lg bg-background/40 p-2 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{conflict.title}</p>
+                            <p className="text-muted-foreground">Conflita com {conflict.blockingTitle}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{conflict.priority ?? 'SEM'}</Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={resolvingConflictEventId === conflict.eventId}
+                              onClick={() => handleResolveConflict(conflict)}
+                            >
+                              {resolvingConflictEventId === conflict.eventId ? 'Resolvendo...' : 'Resolver'}
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          Atual {new Date(conflict.currentStart).toLocaleString('pt-BR')} - {new Date(conflict.currentEnd).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="mt-1 text-muted-foreground">
+                          Sugerido {new Date(conflict.suggestedStart).toLocaleString('pt-BR')} - {new Date(conflict.suggestedEnd).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="mt-1 text-[11px] uppercase tracking-wide text-red-200/80">{conflict.impact}</p>
+                        <p className="mt-1 text-red-100/80">{conflict.rationale}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Nenhum conflito com sugestao automatica no momento.</p>
+                )}
+              </div>
             </div>
-            <div className="space-y-2 rounded-lg bg-muted/30 p-3">
-              <p className="font-medium">3. Algum Dia ({bucketCounts.SOMEDAY ?? 0} itens)</p>
-              <p className="text-xs text-muted-foreground">Promova para Hoje ou Esta Semana o que realmente entrou no radar.</p>
-            </div>
-            <div className="space-y-2 rounded-lg bg-muted/30 p-3">
-              <p className="font-medium">4. Aguardando ({bucketCounts.WAITING ?? 0} itens)</p>
-              <p className="text-xs text-muted-foreground">Veja se precisa cobrar, lembrar alguem ou transformar em proximo passo seu.</p>
-            </div>
-            <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-              <p className="font-medium text-emerald-400">5. Planejar a semana</p>
-              <p className="text-xs text-muted-foreground">Escolha as tres prioridades reais e distribua entre Hoje, Semana e Agenda 24h.</p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nao foi possivel carregar a revisao.</p>
+          )}
           <div className="flex justify-end">
             <Button onClick={() => setReviewOpen(false)}>Revisao concluida</Button>
           </div>

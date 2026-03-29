@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp-tests",
+    "rootDir": ".",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": false,
+    "incremental": false,
+    "isolatedModules": false
+  },
+  "include": [
+    "tests/**/*.ts",
+    "lib/storage.ts",
+    "lib/valuation.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next"
+  ]
+}

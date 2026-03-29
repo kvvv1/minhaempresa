@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { parsePlannerEventDescription } from '@/lib/planner'
+import { deletePlannerItemForCalendarEvent, upsertPlannerItemFromCalendarEvent } from '@/lib/planner-persistence'
+import { getPlannerWritableSource } from '@/lib/planner-origin'
 import { prisma } from '@/lib/prisma'
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,9 +26,24 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         module: data.module !== undefined ? data.module : undefined,
       },
     })
+
+    const parsedDescription = parsePlannerEventDescription(event.description)
+    const linkedSource =
+      parsedDescription.metadata?.scheduleMode === 'linked' && parsedDescription.metadata.sourceType && parsedDescription.metadata.sourceId
+        ? await getPlannerWritableSource(parsedDescription.metadata.sourceType, parsedDescription.metadata.sourceId, session.user.id)
+        : null
+
+    await upsertPlannerItemFromCalendarEvent({
+      userId: session.user.id,
+      event,
+      metadata: parsedDescription.metadata,
+      linkedSource,
+      description: parsedDescription.description,
+    })
+
     return NextResponse.json({
       ...event,
-      description: parsePlannerEventDescription(event.description).description,
+      description: parsedDescription.description,
     })
   } catch {
     return NextResponse.json({ error: 'Erro ao atualizar evento' }, { status: 500 })
@@ -39,6 +56,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   const { id } = await params
   try {
+    await deletePlannerItemForCalendarEvent(id, session.user.id)
     await prisma.calendarEvent.delete({ where: { id, userId: session.user.id } })
     return NextResponse.json({ success: true })
   } catch {

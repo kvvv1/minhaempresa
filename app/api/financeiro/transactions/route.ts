@@ -61,6 +61,17 @@ export async function POST(req: Request) {
   const data = await req.json()
   const userId = session.user.id
 
+  if (data.budgetId) {
+    const budget = await prisma.budget.findFirst({
+      where: { id: data.budgetId, userId },
+      select: { id: true },
+    })
+
+    if (!budget) {
+      return NextResponse.json({ error: 'Orcamento nao encontrado' }, { status: 404 })
+    }
+  }
+
   const transaction = await prisma.transaction.create({
     data: {
       userId,
@@ -79,7 +90,9 @@ export async function POST(req: Request) {
   // Budget alert — check on every expense linked to a budget
   if (data.type === 'EXPENSE' && data.budgetId) {
     try {
-      const budget = await prisma.budget.findUnique({ where: { id: data.budgetId } })
+      const budget = await prisma.budget.findFirst({
+        where: { id: data.budgetId, userId },
+      })
       if (budget) {
         const now = new Date()
         const monthStart = startOfMonth(now)

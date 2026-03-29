@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { parsePlannerEventDescription, serializePlannerEventDescription } from '@/lib/planner'
+import { deletePlannerItemForCalendarEvent, upsertPlannerItemFromCalendarEvent } from '@/lib/planner-persistence'
 import { getPlannerWritableSource, syncPlannerSourceSchedule } from '@/lib/planner-origin'
 import { prisma } from '@/lib/prisma'
 
@@ -75,9 +76,11 @@ export async function PUT(req: Request, { params }: RouteContext) {
     }
 
     const nextDescription =
-      data.description !== undefined
-        ? data.description
-        : linkedSource?.description ?? parsedExisting.description
+      linkedSource
+        ? linkedSource.description ?? parsedExisting.description
+        : data.description !== undefined
+          ? data.description
+          : parsedExisting.description
 
     const event = await prisma.calendarEvent.update({
       where: { id, userId: session.user.id },
@@ -100,6 +103,14 @@ export async function PUT(req: Request, { params }: RouteContext) {
       })
     }
 
+    await upsertPlannerItemFromCalendarEvent({
+      userId: session.user.id,
+      event,
+      metadata: parsedExisting.metadata,
+      linkedSource,
+      description: parsePlannerEventDescription(event.description).description,
+    })
+
     return NextResponse.json({
       ...event,
       description: parsePlannerEventDescription(event.description).description,
@@ -109,5 +120,44 @@ export async function PUT(req: Request, { params }: RouteContext) {
     const message = error instanceof Error ? error.message : 'Erro ao atualizar bloco'
     const status = message.includes('obrigatorio') || message.includes('invalido') ? 400 : 500
     return NextResponse.json({ error: message }, { status })
+  }
+}
+
+export async function DELETE(_req: Request, { params }: RouteContext) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const { id } = await params
+    const existingEvent = await prisma.calendarEvent.findFirst({
+      where: {
+        id,
+        userId: session.user.id,
+      },
+    })
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Bloco nao encontrado' }, { status: 404 })
+    }
+
+    const parsedExisting = parsePlannerEventDescription(existingEvent.description)
+    if (parsedExisting.metadata?.scheduleMode === 'linked') {
+      return NextResponse.json(
+        { error: 'Blocos vinculados devem ser replanejados ou concluídos pela origem.' },
+        { status: 409 }
+      )
+    }
+
+    await deletePlannerItemForCalendarEvent(id, session.user.id)
+    await prisma.calendarEvent.delete({
+      where: {
+        id,
+        userId: session.user.id,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Erro ao remover bloco' }, { status: 500 })
   }
 }

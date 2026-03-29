@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { type PlannerEventMetadata, parsePlannerEventDescription, serializePlannerEventDescription } from '@/lib/planner'
+import { findPlannerItemForOrigin, upsertPlannerItemFromCalendarEvent } from '@/lib/planner-persistence'
 import { getPlannerWritableSource, syncPlannerSourceSchedule } from '@/lib/planner-origin'
 import { prisma } from '@/lib/prisma'
 
@@ -69,31 +70,56 @@ export async function POST(req: Request) {
     }
 
     const description =
-      data.description !== undefined
-        ? data.description
-        : linkedSource?.description ?? null
+      linkedSource
+        ? linkedSource.description ?? null
+        : data.description !== undefined
+          ? data.description
+          : null
 
-    const event = await prisma.calendarEvent.create({
-      data: {
-        userId: session.user.id,
-        title,
-        description: serializePlannerEventDescription(description, metadata),
-        startAt,
-        endAt,
-        allDay,
-        color:
-          linkedSource?.sourceModule === 'tarefas'
-            ? '#38bdf8'
-            : linkedSource?.sourceModule === 'rotina'
-              ? '#8b5cf6'
-              : linkedSource?.sourceModule === 'trabalho'
-                ? '#f97316'
-                : linkedSource?.sourceModule === 'faculdade'
-                  ? '#10b981'
-                  : '#f59e0b',
-        module: linkedSource?.sourceModule ?? 'calendario',
-      },
-    })
+    const serializedDescription = serializePlannerEventDescription(description, metadata)
+    const calendarEventData = {
+      title,
+      description: serializedDescription,
+      startAt,
+      endAt,
+      allDay,
+      color:
+        linkedSource?.sourceModule === 'tarefas'
+          ? '#38bdf8'
+          : linkedSource?.sourceModule === 'rotina'
+            ? '#8b5cf6'
+            : linkedSource?.sourceModule === 'trabalho'
+              ? '#f97316'
+              : linkedSource?.sourceModule === 'faculdade'
+                ? '#10b981'
+                : '#f59e0b',
+      module: linkedSource?.sourceModule ?? 'calendario',
+    }
+
+    const existingPlannerItem =
+      linkedSource
+        ? await findPlannerItemForOrigin({
+            userId: session.user.id,
+            sourceType: linkedSource.sourceType,
+            sourceId: linkedSource.id,
+          })
+        : null
+
+    const event =
+      existingPlannerItem?.calendarEventId
+        ? await prisma.calendarEvent.update({
+            where: {
+              id: existingPlannerItem.calendarEventId,
+              userId: session.user.id,
+            },
+            data: calendarEventData,
+          })
+        : await prisma.calendarEvent.create({
+            data: {
+              userId: session.user.id,
+              ...calendarEventData,
+            },
+          })
 
     if (linkedSource) {
       await syncPlannerSourceSchedule({
@@ -105,6 +131,14 @@ export async function POST(req: Request) {
     }
 
     const parsedDescription = parsePlannerEventDescription(event.description)
+
+    await upsertPlannerItemFromCalendarEvent({
+      userId: session.user.id,
+      event,
+      metadata,
+      linkedSource,
+      description: parsedDescription.description,
+    })
 
     return NextResponse.json({
       ...event,

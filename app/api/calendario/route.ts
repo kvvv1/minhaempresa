@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { parsePlannerEventDescription } from '@/lib/planner'
+import { upsertPlannerItemFromCalendarEvent } from '@/lib/planner-persistence'
+import { getPlannerWritableSource } from '@/lib/planner-origin'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: Request) {
@@ -47,9 +49,24 @@ export async function POST(req: Request) {
         module: data.module ?? null,
       },
     })
+
+    const parsedDescription = parsePlannerEventDescription(event.description)
+    const linkedSource =
+      parsedDescription.metadata?.scheduleMode === 'linked' && parsedDescription.metadata.sourceType && parsedDescription.metadata.sourceId
+        ? await getPlannerWritableSource(parsedDescription.metadata.sourceType, parsedDescription.metadata.sourceId, session.user.id)
+        : null
+
+    await upsertPlannerItemFromCalendarEvent({
+      userId: session.user.id,
+      event,
+      metadata: parsedDescription.metadata,
+      linkedSource,
+      description: parsedDescription.description,
+    })
+
     return NextResponse.json({
       ...event,
-      description: parsePlannerEventDescription(event.description).description,
+      description: parsedDescription.description,
     })
   } catch {
     return NextResponse.json({ error: 'Erro ao criar evento' }, { status: 500 })

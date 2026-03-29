@@ -40,10 +40,10 @@ docker compose up -d postgres
 npm run db:generate
 ```
 
-5. Aplique as migracoes locais:
+5. Aplique as migracoes versionadas:
 
 ```bash
-npm run db:migrate -- --name init
+npm run db:deploy
 ```
 
 6. Inicie o projeto:
@@ -68,6 +68,12 @@ TARGET_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vida_sa?schem
 ```
 
 Quando `TARGET_DATABASE_URL` nao for definido, o script usa `DATABASE_URL`.
+
+Para criar uma nova migracao de schema a partir daqui, use:
+
+```bash
+npm run db:migrate -- --name nome-da-mudanca
+```
 
 ## Variaveis de ambiente
 

@@ -12,6 +12,10 @@ export interface PlannerWritableSourceRecord {
   description: string | null
   dueDate: Date | null
   estimatedMin: number | null
+  status: string | null
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | null
+  context: string | null
+  energy: 'LOW' | 'MEDIUM' | 'HIGH' | null
   sourceType: PlannerWritableSourceType
   sourceModule: PlannerModule
 }
@@ -40,6 +44,10 @@ export async function getPlannerWritableSource(sourceType: PlannerSourceType, so
       description: task.description ?? null,
       dueDate: task.dueDate ?? null,
       estimatedMin: task.estimatedMin ?? null,
+      status: task.status,
+      priority: task.priority,
+      context: task.context ?? null,
+      energy: task.energy ?? null,
       sourceType: 'gtdTask',
       sourceModule: 'tarefas',
     }
@@ -58,6 +66,10 @@ export async function getPlannerWritableSource(sourceType: PlannerSourceType, so
       description: task.description ?? null,
       dueDate: task.dueDate ?? null,
       estimatedMin: null,
+      status: task.status,
+      priority: task.priority,
+      context: null,
+      energy: null,
       sourceType: 'routineTask',
       sourceModule: 'rotina',
     }
@@ -76,6 +88,10 @@ export async function getPlannerWritableSource(sourceType: PlannerSourceType, so
       description: task.description ?? null,
       dueDate: task.dueDate ?? null,
       estimatedMin: task.estimatedMin ?? null,
+      status: task.status,
+      priority: task.priority,
+      context: null,
+      energy: null,
       sourceType: 'projectTask',
       sourceModule: 'trabalho',
     }
@@ -93,6 +109,10 @@ export async function getPlannerWritableSource(sourceType: PlannerSourceType, so
     description: assignment.description ?? null,
     dueDate: assignment.dueDate ?? null,
     estimatedMin: null,
+    status: assignment.status,
+    priority: assignment.priority,
+    context: null,
+    energy: null,
     sourceType: 'assignment',
     sourceModule: 'faculdade',
   }

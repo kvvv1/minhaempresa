@@ -2,19 +2,25 @@ import { endOfWeek, isSameDay, startOfDay } from 'date-fns'
 
 export type PlannerScope = 'today' | 'week' | 'month'
 
-export type PlannerModule = 'tarefas' | 'rotina' | 'trabalho' | 'faculdade' | 'calendario'
+export type PlannerModule = 'tarefas' | 'rotina' | 'trabalho' | 'faculdade' | 'saude' | 'nutricao' | 'metas' | 'calendario'
 
 export type PlannerSourceType =
   | 'gtdTask'
   | 'routineTask'
   | 'projectTask'
+  | 'project'
   | 'assignment'
+  | 'studySession'
+  | 'workout'
+  | 'meal'
+  | 'goal'
   | 'calendarEvent'
   | 'meeting'
 
 export type PlannerPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 
 export type PlannerScheduleMode = 'manual' | 'linked'
+export type PlannerOwnership = 'origin' | 'calendar' | 'planner'
 
 export interface PlannerEventMetadata {
   scheduleMode: PlannerScheduleMode
@@ -25,6 +31,7 @@ export interface PlannerEventMetadata {
 
 export interface PlannerItem {
   id: string
+  plannerItemId?: string | null
   sourceId: string
   sourceType: PlannerSourceType
   sourceModule: PlannerModule
@@ -45,6 +52,8 @@ export interface PlannerItem {
   estimatedMin?: number | null
   scheduleEventId?: string | null
   scheduleMode?: PlannerScheduleMode | null
+  ownership?: PlannerOwnership | null
+  persisted?: boolean
 }
 
 export interface PlannerHabit {
@@ -64,6 +73,13 @@ export interface PlannerSummary {
   habitsCompletedCount: number
 }
 
+export interface PlannerInsight {
+  id: string
+  level: 'info' | 'warning' | 'alert'
+  title: string
+  message: string
+}
+
 export interface PlannerResponse {
   scope: PlannerScope
   date: string
@@ -77,6 +93,7 @@ export interface PlannerResponse {
   focusItems: PlannerItem[]
   overdueItems: PlannerItem[]
   habits: PlannerHabit[]
+  insights: PlannerInsight[]
 }
 
 const PLANNER_EVENT_METADATA_PREFIX = '<!-- planner:'
@@ -87,7 +104,16 @@ function normalizePlannerText(value?: string | null) {
 }
 
 function isPlannerModuleValue(value: unknown): value is PlannerModule {
-  return value === 'tarefas' || value === 'rotina' || value === 'trabalho' || value === 'faculdade' || value === 'calendario'
+  return (
+    value === 'tarefas' ||
+    value === 'rotina' ||
+    value === 'trabalho' ||
+    value === 'faculdade' ||
+    value === 'saude' ||
+    value === 'nutricao' ||
+    value === 'metas' ||
+    value === 'calendario'
+  )
 }
 
 function isPlannerSourceTypeValue(value: unknown): value is PlannerSourceType {
@@ -95,7 +121,12 @@ function isPlannerSourceTypeValue(value: unknown): value is PlannerSourceType {
     value === 'gtdTask' ||
     value === 'routineTask' ||
     value === 'projectTask' ||
+    value === 'project' ||
     value === 'assignment' ||
+    value === 'studySession' ||
+    value === 'workout' ||
+    value === 'meal' ||
+    value === 'goal' ||
     value === 'calendarEvent' ||
     value === 'meeting'
   )
@@ -185,6 +216,9 @@ export const PLANNER_MODULE_CONFIG: Record<PlannerModule, { label: string; class
   rotina: { label: 'Rotina', className: 'border-violet-500/30 text-violet-300' },
   trabalho: { label: 'Trabalho', className: 'border-orange-500/30 text-orange-300' },
   faculdade: { label: 'Faculdade', className: 'border-emerald-500/30 text-emerald-300' },
+  saude: { label: 'Saude', className: 'border-rose-500/30 text-rose-300' },
+  nutricao: { label: 'Nutricao', className: 'border-lime-500/30 text-lime-300' },
+  metas: { label: 'Metas', className: 'border-cyan-500/30 text-cyan-300' },
   calendario: { label: 'Calendario', className: 'border-amber-500/30 text-amber-300' },
 }
 

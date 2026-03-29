@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { parseStoredObject } from '@/lib/storage'
 
 const DEFAULT_PREFS = {
   dailyBriefing: true,
@@ -29,12 +30,8 @@ export async function GET() {
     select: { notificationPrefs: true },
   })
 
-  try {
-    const prefs = JSON.parse(user?.notificationPrefs || '{}')
-    return NextResponse.json({ ...DEFAULT_PREFS, ...prefs })
-  } catch {
-    return NextResponse.json(DEFAULT_PREFS)
-  }
+  const prefs = parseStoredObject(user?.notificationPrefs, DEFAULT_PREFS)
+  return NextResponse.json({ ...DEFAULT_PREFS, ...prefs })
 }
 
 export async function PUT(req: Request) {
@@ -42,11 +39,11 @@ export async function PUT(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = prefsSchema.safeParse(await req.json())
-  if (!parsed.success) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ error: 'Dados invalidos' }, { status: 400 })
 
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { notificationPrefs: JSON.stringify(parsed.data) },
+    data: { notificationPrefs: parsed.data },
   })
 
   return NextResponse.json(parsed.data)

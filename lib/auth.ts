@@ -5,7 +5,7 @@ import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  adapter: PrismaAdapter(prisma),
   session: {
     strategy: 'jwt',
   },
@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id
-        token.onboarded = (user as any).onboarded
+        token.onboarded = user.onboarded
       }
       if (trigger === 'update' && session?.onboarded !== undefined) {
         token.onboarded = session.onboarded

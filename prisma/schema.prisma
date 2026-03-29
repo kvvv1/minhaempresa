@@ -16,7 +16,7 @@ model User {
   companyName   String    @default("Minha Vida S.A.")
   mission       String?
   values             String    @default("[]")
-  notificationPrefs  String    @default("{}")
+  notificationPrefs  Json      @default("{}")
   onboarded          Boolean   @default(false)
   foundedAt     DateTime  @default(now())
   accounts      Account[]
@@ -53,6 +53,7 @@ model User {
   gtdTasks         GtdTask[]
   savingsGoals     SavingsGoal[]
   calendarEvents    CalendarEvent[]
+  plannerItems      PlannerItem[]
   savedConversations SavedConversation[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -408,7 +409,7 @@ model CompanyValuation {
   id        String   @id @default(cuid())
   userId    String
   value     Float
-  scores    String   @default("{}")
+  scores    Json     @default("{}")
   date      DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -737,6 +738,13 @@ enum GtdEnergy {
   HIGH
 }
 
+enum PlannerItemStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 // ─── Financeiro — Metas de Poupança ──────────────────────────────────────────
 
 model SavingsGoal {
@@ -769,6 +777,36 @@ model CalendarEvent {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+model PlannerItem {
+  id              String            @id @default(cuid())
+  userId          String
+  title           String
+  description     String?
+  kind            String            @default("block")
+  originModule    String?
+  originType      String?
+  originId        String?
+  status          PlannerItemStatus @default(SCHEDULED)
+  priority        TaskPriority?
+  scheduledStart  DateTime?
+  scheduledEnd    DateTime?
+  dueDate         DateTime?
+  allDay          Boolean           @default(false)
+  estimatedMin    Int?
+  context         String?
+  energy          GtdEnergy?
+  isManual        Boolean           @default(false)
+  isDerived       Boolean           @default(false)
+  calendarEventId String?           @unique
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([userId, scheduledStart])
+  @@index([userId, originType, originId])
+  @@index([userId, status])
 }
 
 // ─── Conversas Salvas ─────────────────────────────────────────────────────────

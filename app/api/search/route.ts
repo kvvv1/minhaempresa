@@ -15,28 +15,34 @@ export async function GET(req: Request) {
 
   const [transactions, goals, contacts, habits, books] = await Promise.all([
     prisma.transaction.findMany({
-      where: { userId, description: { contains: q } },
+      where: { userId, description: { contains: q, mode: 'insensitive' } },
       orderBy: { date: 'desc' },
       take: 5,
       select: { id: true, description: true, amount: true, type: true, date: true },
     }),
     prisma.goal.findMany({
-      where: { userId, title: { contains: q } },
+      where: { userId, title: { contains: q, mode: 'insensitive' } },
       take: 5,
       select: { id: true, title: true, status: true, progress: true },
     }),
     prisma.contact.findMany({
-      where: { userId, name: { contains: q } },
+      where: { userId, name: { contains: q, mode: 'insensitive' } },
       take: 5,
       select: { id: true, name: true, relationship: true },
     }),
     prisma.habit.findMany({
-      where: { userId, name: { contains: q }, isActive: true },
+      where: { userId, name: { contains: q, mode: 'insensitive' }, isActive: true },
       take: 5,
       select: { id: true, name: true, streak: true },
     }),
     prisma.book.findMany({
-      where: { userId, OR: [{ title: { contains: q } }, { author: { contains: q } }] },
+      where: {
+        userId,
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { author: { contains: q, mode: 'insensitive' } },
+        ],
+      },
       take: 5,
       select: { id: true, title: true, author: true, status: true },
     }),
